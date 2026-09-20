@@ -1,0 +1,37 @@
+# Product
+
+## Register
+
+product
+
+## Users
+
+English learners who practice listening comprehension by filling in the blanks of song lyrics while a YouTube music video plays. No accounts, no backend — everything runs and persists (progress, XP, streaks, achievements) in the browser via LocalStorage. Sessions are short, focused bursts (one song at a time), often replayed multiple times to improve accuracy.
+
+## Product Purpose
+
+SongGap is an original take on the LingoClip/LyricsTraining game mechanic: pick a song, watch the music video, type or select the words hidden in the synced lyrics before the line passes. Success looks like a player staying immersed in the video and the music while still being able to type comfortably, understanding at a glance what to do next, and coming back for more songs/streaks without ever hitting a login wall or a confusing screen.
+
+## Brand Personality
+
+Three words: **immersive, kinetic, encouraging.**
+
+A deliberate mix of Spotify (moody, music-first, dark-by-default, content takes the spotlight), Duolingo (game-like feedback — streaks, XP, combo, celebratory micro-moments, forgiving of mistakes) and a modern SaaS product's restraint (fast, uncluttered chrome, no dashboard bloat). The shipped "Marquee" theme — a midnight record-store palette (near-black warm background, cream ink, coral + acid-lime neon accent pair) with frosted glass surfaces and a subtle film-grain overlay — is the established identity and should be preserved and extended, not replaced.
+
+## Anti-references
+
+- **Generic corporate SaaS.** No gray dashboard chrome, no identical stat-card grids, no "admin panel" seriousness — this is about music and play, not spreadsheets.
+- **Childish literacy apps.** Avoid cutesy mascots, oversized rounded shapes, and cartoon illustration typical of kids'-alphabet apps — the tone is closer to a music app than a classroom.
+- **Generic/dated templates.** Nothing that reads as an unstyled Bootstrap default or a stock template with no identity of its own.
+
+## Design Principles
+
+1. **Video and lyrics stay close together.** The player is never more than a glance away from the text the user is typing into — proximity beats decoration every time a layout choice has to pick one.
+2. **Feedback is immediate and game-like, never punitive.** Correct answers celebrate (motion, color, sound-adjacent visual cues); mistakes give another try (retry-rewind) rather than a dead end.
+3. **Glassmorphism is a considered material, not a reflex.** `.glass` frosted panels are the established "Marquee" surface language — use them for real elevated surfaces (player, panels, HUD chips), not as decoration on everything.
+4. **Local-first means zero friction.** No auth, no loading spinners waiting on a server — every interaction should feel instant, since all state is already in the browser.
+5. **Playable without a mouse.** Because it's a fast-paced typing game, keyboard flow (tab order, focus rings, auto-focus on the next blank) is as core to the experience as the visuals.
+
+## Accessibility & Inclusion
+
+Target: **WCAG AA.** Minimum 4.5:1 contrast for body text (3:1 for large/bold text), full keyboard operability (including the game loop itself — typing, seeking, retrying), visible focus states on every interactive element, semantic landmarks and ARIA labels for icon-only controls, and a `prefers-reduced-motion` alternative for every animation (the game already relies on Framer Motion for feedback, so this matters more here than on a typical marketing site).
