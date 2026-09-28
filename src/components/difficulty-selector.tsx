@@ -6,6 +6,7 @@ import { Skull, Smile, Meh, Frown } from "lucide-react"
 import type { Song } from "@/types/Song"
 import type { Difficulty } from "@/types/Difficulty"
 import { estimateHiddenWordCounts } from "@/modules/game/exerciseGenerator"
+import { groupLyricLines } from "@/modules/lyrics/groupLyricLines"
 import { cn } from "@/lib/utils"
 
 interface DifficultyOption {
@@ -49,7 +50,7 @@ export function DifficultySelector({
   song: Song
   onSelect: (difficulty: Difficulty) => void
 }) {
-  const counts = useMemo(() => estimateHiddenWordCounts(song.lyrics), [song])
+  const counts = useMemo(() => estimateHiddenWordCounts(groupLyricLines(song.lyrics)), [song])
   const total = counts.expert
 
   return (

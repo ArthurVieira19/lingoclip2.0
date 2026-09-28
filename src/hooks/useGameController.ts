@@ -4,10 +4,12 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import { toast } from "sonner"
 import type { Song } from "@/types/Song"
 import type { Difficulty } from "@/types/Difficulty"
+import type { GameMode } from "@/types/GameMode"
 import type { ExerciseLine } from "@/types/ExerciseLine"
 import type { GameResult } from "@/types/Achievement"
 import { YouTubePlayer } from "@/modules/player/youtubePlayer"
 import { GameSynchronizer } from "@/modules/game/GameSynchronizer"
+import { groupLyricLines } from "@/modules/lyrics/groupLyricLines"
 import { buildVocabularyPool, generateExerciseLine } from "@/modules/game/exerciseGenerator"
 import { validateAnswer } from "@/modules/game/answerValidator"
 import { scoreAnswer } from "@/modules/game/scoreEngine"
@@ -19,16 +21,24 @@ import { useSettingsStore } from "@/stores/settingsStore"
 import { useAchievementStore } from "@/stores/achievementStore"
 
 const YOUTUBE_STATE_PLAYING = 1
-const RETRY_REWIND_SECONDS = 10
 /** Only the rewind buttons' -10s/-5s math reads this from the store, so 5Hz is plenty; GameSynchronizer tracks its own per-frame clock for lyric sync. */
 const CURRENT_TIME_UPDATE_INTERVAL_MS = 200
 
-/** A hidden token the player hasn't nailed yet — never answered, or answered wrong. */
+/**
+ * A hidden token the player hasn't nailed yet — never answered, or answered
+ * wrong. A skipped line (see skipLine) is always treated as complete: its
+ * blanks are deliberately marked wrong so their answers reveal, but that
+ * must not re-trigger the pause-for-retry flow the instant playback moves
+ * on to the next line.
+ */
 function isIncompleteToken(
   line: ExerciseLine,
   lineIndex: number,
   answeredTokens: Record<string, boolean>,
+  skippedLines: Set<number>,
 ): boolean {
+  if (skippedLines.has(lineIndex)) return false
+
   return line.tokens.some((token) => {
     if (!token.isHidden) return false
     const outcome = answeredTokens[answeredTokenKey(lineIndex, token.index)]
@@ -41,7 +51,12 @@ function isIncompleteToken(
  * generator, validator, scoring, achievements) to the Zustand stores for a
  * single game session. No game logic lives here beyond orchestration.
  */
-export function useGameController(song: Song, elementId: string, difficulty: Difficulty) {
+export function useGameController(
+  song: Song,
+  elementId: string,
+  difficulty: Difficulty,
+  mode: GameMode,
+) {
   const settings = useSettingsStore((s) => s.settings)
   const playerStore = usePlayerStore()
   const gameStore = useGameStore()
@@ -51,8 +66,7 @@ export function useGameController(song: Song, elementId: string, difficulty: Dif
   const syncRef = useRef<GameSynchronizer | null>(null)
   const lineStartedAtRef = useRef<number>(Date.now())
   const sessionStartRef = useRef<number>(Date.now())
-  /** Line index we've already auto-rewound once for, so a still-unbeaten line doesn't loop forever. */
-  const retriedLineIndexRef = useRef<number | null>(null)
+  const skippedLinesRef = useRef<Set<number>>(new Set())
 
   const [isReady, setIsReady] = useState(false)
   const [isComplete, setIsComplete] = useState(false)
@@ -67,17 +81,24 @@ export function useGameController(song: Song, elementId: string, difficulty: Dif
     setLastResult(null)
     sessionStartRef.current = Date.now()
     lineStartedAtRef.current = Date.now()
+    skippedLinesRef.current = new Set()
 
     // Fresh per playthrough so the hidden words vary each time the song is
     // played — stable for the rest of this session (retries/rewinds don't
     // reshuffle mid-attempt), but different from the last time you played it.
     const sessionSeed = Math.random().toString(36).slice(2)
 
-    const exercises = song.lyrics.map((line, index) =>
+    // Groups quickly-timestamped LRC lines into bigger chunks so each one
+    // stays on screen long enough to read and answer — the synchronizer
+    // below is driven by these same grouped lines, so its active-line
+    // index always lines up with `exercises`.
+    const lyrics = groupLyricLines(song.lyrics)
+
+    const exercises = lyrics.map((line, index) =>
       generateExerciseLine(line, {
         lineIndex: index,
         difficulty,
-        mode: settings.defaultGameMode,
+        mode,
         seed: `${song.id}:${sessionSeed}:${index}`,
         distractorPool,
       }),
@@ -85,7 +106,7 @@ export function useGameController(song: Song, elementId: string, difficulty: Dif
 
     gameStore.setExercises(exercises)
     gameStore.setDifficulty(difficulty)
-    gameStore.setMode(settings.defaultGameMode)
+    gameStore.setMode(mode)
     playerStore.setSong(song)
 
     const player = new YouTubePlayer({
@@ -96,7 +117,7 @@ export function useGameController(song: Song, elementId: string, difficulty: Dif
     })
     playerRef.current = player
 
-    const sync = new GameSynchronizer(player, song.lyrics)
+    const sync = new GameSynchronizer(player, lyrics)
     sync.onChange((_line, index) => {
       const state = useGameStore.getState()
       const previousIndex = state.activeExerciseIndex
@@ -106,12 +127,9 @@ export function useGameController(song: Song, elementId: string, difficulty: Dif
         previousLine &&
         previousIndex >= 0 &&
         previousIndex !== index &&
-        previousIndex !== retriedLineIndexRef.current &&
-        isIncompleteToken(previousLine, previousIndex, state.answeredTokens)
+        isIncompleteToken(previousLine, previousIndex, state.answeredTokens, skippedLinesRef.current)
 
       if (missedPreviousLine && previousLine) {
-        retriedLineIndexRef.current = previousIndex
-
         previousLine.tokens.forEach((token) => {
           if (
             token.isHidden &&
@@ -121,8 +139,12 @@ export function useGameController(song: Song, elementId: string, difficulty: Dif
           }
         })
 
-        toast("Time's up — rewinding 10s to try again")
-        player.seek(Math.max(0, player.getCurrentTime() - RETRY_REWIND_SECONDS))
+        // Pause right here instead of letting playback bleed into the next
+        // line — the player gets unlimited time to answer or replay this
+        // line, rather than a fixed countdown racing against a rewind.
+        player.pause()
+        useGameStore.getState().setPendingRetry(previousIndex)
+        toast("Paused — answer the blank or replay the line")
         return
       }
 
@@ -138,9 +160,9 @@ export function useGameController(song: Song, elementId: string, difficulty: Dif
       playerRef.current = null
       syncRef.current = null
     }
-    // Re-run only when the song, its element, or the chosen difficulty changes.
+    // Re-run only when the song, its element, or the chosen difficulty/mode changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [song.id, elementId, difficulty])
+  }, [song.id, elementId, difficulty, mode])
 
   useEffect(() => {
     let rafId: number
@@ -240,12 +262,122 @@ export function useGameController(song: Song, elementId: string, difficulty: Dif
     })
 
     const updated = useGameStore.getState()
+
+    // Filling in the last blank of a paused-for-retry line is itself the
+    // "continue" action — no need to also click the retry button.
+    if (
+      updated.pendingRetryLineIndex === exerciseIndex &&
+      !isIncompleteToken(line, exerciseIndex, updated.answeredTokens, skippedLinesRef.current)
+    ) {
+      gameStore.setPendingRetry(null)
+      // The synchronizer already silently advanced past this line the
+      // moment it paused (it just withheld the store update while retry was
+      // pending) — resuming without seeking back means its internal index
+      // won't change again on the next tick, so it'd never notify the store
+      // and the *next* line after this one would get skipped entirely.
+      syncRef.current?.resync()
+      play()
+    }
+
     const totalHidden = countHiddenTokens(updated.exercises)
     if (totalHidden > 0 && updated.totalAnswers >= totalHidden) {
       finishSong()
     }
 
     return { isCorrect, ...result }
+  }
+
+  /** Replays the paused line from its start after the player asks to hear it again. */
+  function retryLine() {
+    const state = useGameStore.getState()
+    const lineIndex = state.pendingRetryLineIndex
+    if (lineIndex === null) return
+
+    const line = state.exercises[lineIndex]
+    if (!line) return
+
+    gameStore.setPendingRetry(null)
+    lineStartedAtRef.current = Date.now()
+    playerRef.current?.seek(Math.max(0, line.start))
+    play()
+  }
+
+  /**
+   * Reveals every still-unanswered blank in the current line as a miss and
+   * moves on — for when the player doesn't know the word and would rather
+   * not guess or sit through a replay. Works whether the line is actively
+   * playing or already paused waiting for a retry.
+   */
+  function skipLine() {
+    const state = useGameStore.getState()
+    const lineIndex = state.pendingRetryLineIndex ?? state.activeExerciseIndex
+    const line = state.exercises[lineIndex]
+    if (!line) return
+
+    // Marked *before* revealing the answers below: those reveals record an
+    // incorrect outcome, which isIncompleteToken would otherwise still read
+    // as "missed" the instant playback moves past this line, re-triggering
+    // the pause-for-retry flow this skip was meant to bypass.
+    skippedLinesRef.current.add(lineIndex)
+
+    line.tokens.forEach((token) => {
+      if (!token.isHidden) return
+      if (answeredTokenKey(lineIndex, token.index) in state.answeredTokens) return
+
+      const result = scoreAnswer({ isCorrect: false, responseTimeMs: 0, timeLimitMs: 0, combo: 0 })
+      gameStore.applyAnswer({
+        exerciseIndex: lineIndex,
+        tokenIndex: token.index,
+        points: result.points,
+        isCorrect: false,
+        newCombo: result.newCombo,
+      })
+    })
+
+    if (state.pendingRetryLineIndex === lineIndex) {
+      gameStore.setPendingRetry(null)
+      // Same reason as submitAnswer's auto-continue above: resuming without
+      // seeking back needs a resync so the synchronizer notifies the store
+      // once playback reaches the next line instead of skipping it.
+      syncRef.current?.resync()
+    }
+
+    lineStartedAtRef.current = Date.now()
+    play()
+
+    const updated = useGameStore.getState()
+    const totalHidden = countHiddenTokens(updated.exercises)
+    if (totalHidden > 0 && updated.totalAnswers >= totalHidden) {
+      finishSong()
+    }
+  }
+
+  /**
+   * Jumps to a clicked line in the lyrics panel: seeks the video there *and*
+   * makes that line the active, writable one right away — clearing its
+   * blanks back to editable instead of leaving them shown as already
+   * answered (or static) until the synchronizer's next tick catches up.
+   */
+  function seekToLine(lineIndex: number) {
+    const state = useGameStore.getState()
+    const line = state.exercises[lineIndex]
+    if (!line) return
+
+    line.tokens.forEach((token) => {
+      if (token.isHidden) {
+        gameStore.unanswerToken(lineIndex, token.index)
+      }
+    })
+
+    // A manual jump back onto a previously skipped line is a genuine
+    // reattempt — let it be missed (and pause for retry) again if it isn't
+    // answered this time around.
+    skippedLinesRef.current.delete(lineIndex)
+
+    gameStore.setPendingRetry(null)
+    gameStore.setActiveExerciseIndex(lineIndex)
+    lineStartedAtRef.current = Date.now()
+    playerRef.current?.seek(Math.max(0, line.start))
   }
 
   return {
@@ -256,6 +388,9 @@ export function useGameController(song: Song, elementId: string, difficulty: Dif
     pause,
     seek,
     submitAnswer,
+    retryLine,
+    skipLine,
+    seekToLine,
     achievementsCount: achievements.achievements.length,
   }
 }

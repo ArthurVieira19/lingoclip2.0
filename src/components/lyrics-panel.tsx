@@ -11,7 +11,8 @@ interface LyricsPanelProps {
   activeExerciseIndex: number
   answeredTokens: Record<string, boolean>
   onSubmit: (tokenIndex: number, value: string) => void
-  onSeek: (seconds: number) => void
+  /** Seeks the video to a clicked line AND makes it the active, writable line. */
+  onLineClick: (lineIndex: number) => void
   fuzzy?: boolean
 }
 
@@ -26,7 +27,7 @@ export function LyricsPanel({
   activeExerciseIndex,
   answeredTokens,
   onSubmit,
-  onSeek,
+  onLineClick,
   fuzzy = true,
 }: LyricsPanelProps) {
   const lineRefs = useRef<Record<number, HTMLDivElement | null>>({})
@@ -38,7 +39,7 @@ export function LyricsPanel({
   if (exercises.length === 0) return null
 
   return (
-    <div className="glass max-h-96 overflow-y-auto rounded-2xl px-4 py-6 sm:max-h-[28rem]">
+    <div className="glass max-h-96 overflow-y-auto rounded-2xl px-4 py-6 sm:max-h-[28rem] lg:h-[70vh] lg:max-h-[70vh]">
       <div className="flex flex-col gap-4">
         {exercises.map((line, index) => {
           const isActive = index === activeExerciseIndex
@@ -59,6 +60,7 @@ export function LyricsPanel({
                   answeredTokens={answeredTokens}
                   onSubmit={onSubmit}
                   fuzzy={fuzzy}
+                  hideChoicePills
                 />
               </div>
             )
@@ -72,9 +74,9 @@ export function LyricsPanel({
               }}
               role="button"
               tabIndex={0}
-              onClick={() => onSeek(line.start)}
+              onClick={() => onLineClick(index)}
               onKeyDown={(event) => {
-                if (event.key === "Enter" || event.key === " ") onSeek(line.start)
+                if (event.key === "Enter" || event.key === " ") onLineClick(index)
               }}
               className={cn(
                 "cursor-pointer rounded-xl px-3 py-2 text-center transition-colors duration-300",

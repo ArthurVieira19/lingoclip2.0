@@ -4,10 +4,12 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { findSong } from "@/data/songs";
 import type { Difficulty } from "@/types/Difficulty";
+import type { GameMode } from "@/types/GameMode";
 import { useLibraryStore } from "@/stores/libraryStore";
 import { useSettingsStore } from "@/stores/settingsStore";
 import { Button } from "@/components/ui/button";
 import { GameScreen } from "@/components/game-screen";
+import { GameModeSelector } from "@/components/game-mode-selector";
 import { DifficultySelector } from "@/components/difficulty-selector";
 
 /** Resolves a song from the built-in catalog or the user's LocalStorage-backed library. */
@@ -16,11 +18,14 @@ export function GameScreenLoader({ songId }: { songId: string }) {
   const updateSettings = useSettingsStore((s) => s.updateSettings);
   const song = findSong(songId, customSongs);
 
+  const [mode, setMode] = useState<GameMode | null>(null);
   const [difficulty, setDifficulty] = useState<Difficulty | null>(null);
 
-  // A different song means starting over: make the player pick a difficulty
-  // for it too, instead of silently carrying over the last song's choice.
+  // A different song means starting over: make the player pick a mode and
+  // difficulty for it too, instead of silently carrying over the last
+  // song's choices.
   useEffect(() => {
+    setMode(null);
     setDifficulty(null);
   }, [songId]);
 
@@ -32,6 +37,18 @@ export function GameScreenLoader({ songId }: { songId: string }) {
           Back to library
         </Button>
       </div>
+    );
+  }
+
+  if (!mode) {
+    return (
+      <GameModeSelector
+        song={song}
+        onSelect={(selected) => {
+          updateSettings({ defaultGameMode: selected });
+          setMode(selected);
+        }}
+      />
     );
   }
 
@@ -47,5 +64,5 @@ export function GameScreenLoader({ songId }: { songId: string }) {
     );
   }
 
-  return <GameScreen song={song} difficulty={difficulty} />;
+  return <GameScreen song={song} difficulty={difficulty} mode={mode} />;
 }

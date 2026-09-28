@@ -30,6 +30,12 @@ interface GameState {
   answeredTokens: Record<string, boolean>
   /** Result of the most recently finished song, read by the Results page. */
   lastResult: GameResult | null
+  /**
+   * Set when playback crosses out of a line that still has unanswered
+   * blanks — the video is paused and waits here until the player either
+   * answers the remaining blanks or explicitly retries the line.
+   */
+  pendingRetryLineIndex: number | null
 }
 
 interface GameActions {
@@ -46,6 +52,7 @@ interface GameActions {
    */
   unanswerToken: (exerciseIndex: number, tokenIndex: number) => void
   setLastResult: (result: GameResult) => void
+  setPendingRetry: (lineIndex: number | null) => void
   reset: () => void
 }
 
@@ -61,6 +68,7 @@ const initialState: GameState = {
   totalAnswers: 0,
   answeredTokens: {},
   lastResult: null,
+  pendingRetryLineIndex: null,
 }
 
 export const useGameStore = create<GameState & GameActions>((set) => ({
@@ -94,5 +102,6 @@ export const useGameStore = create<GameState & GameActions>((set) => ({
       }
     }),
   setLastResult: (lastResult) => set({ lastResult }),
+  setPendingRetry: (pendingRetryLineIndex) => set({ pendingRetryLineIndex }),
   reset: () => set(initialState),
 }))

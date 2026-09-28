@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react"
 import { motion } from "framer-motion"
 import type { ExerciseLine, ExerciseToken } from "@/types/ExerciseLine"
 import { isSingleInsertOrDeleteAway, normalize } from "@/modules/game/answerValidator"
+import { answeredTokenKey } from "@/stores/gameStore"
 import { cn } from "@/lib/utils"
 
 interface ExerciseLineViewProps {
@@ -15,6 +16,8 @@ interface ExerciseLineViewProps {
   caption?: boolean
   /** Whether a near-miss (one missing/extra character) auto-confirms as correct. Defaults to true. */
   fuzzy?: boolean
+  /** Renders multiple-choice blanks as plain placeholders instead of pill buttons — used when the choice pills are shown separately (see ExerciseChoicesView). */
+  hideChoicePills?: boolean
 }
 
 export function ExerciseLineView({
@@ -24,6 +27,7 @@ export function ExerciseLineView({
   onSubmit,
   caption = false,
   fuzzy = true,
+  hideChoicePills = false,
 }: ExerciseLineViewProps) {
   const inputRefs = useRef<Record<number, HTMLInputElement | null>>({})
 
@@ -61,6 +65,7 @@ export function ExerciseLineView({
             onSubmit={(value) => onSubmit(token.index, value)}
             caption={caption}
             fuzzy={fuzzy}
+            hideChoicePills={hideChoicePills}
             inputRef={(el) => {
               inputRefs.current[token.index] = el
             }}
@@ -78,6 +83,7 @@ function ExerciseTokenView({
   onSubmit,
   caption,
   fuzzy,
+  hideChoicePills,
   inputRef,
 }: {
   token: ExerciseToken
@@ -86,6 +92,7 @@ function ExerciseTokenView({
   onSubmit: (value: string) => void
   caption: boolean
   fuzzy: boolean
+  hideChoicePills: boolean
   inputRef: (el: HTMLInputElement | null) => void
 }) {
   const [value, setValue] = useState("")
@@ -118,6 +125,18 @@ function ExerciseTokenView({
   }
 
   if (token.choices) {
+    if (hideChoicePills) {
+      const blankWidth = Math.max(token.answer?.length ?? 3, 3)
+      return (
+        <span
+          aria-label={token.answer ? `Missing word, ${token.answer.length} letters` : "Missing word"}
+          className={cn("tracking-widest", caption ? "text-white/50" : "text-primary/40")}
+        >
+          {"•".repeat(blankWidth)}
+        </span>
+      )
+    }
+
     return (
       <span
         role="group"
@@ -181,5 +200,49 @@ function ExerciseTokenView({
       }}
       placeholder="···"
     />
+  )
+}
+
+/**
+ * Standalone pool of multiple-choice pill buttons for the active line's
+ * next unanswered blank — rendered apart from the lyrics text (see the
+ * word-choice panel in game-screen.tsx) instead of inline, so the lyrics
+ * column can show plain blanks via ExerciseLineView's hideChoicePills.
+ * Only one blank's options show at a time, so the pool never grows past
+ * the 4 choices that blank carries.
+ */
+export function ExerciseChoicesView({
+  line,
+  exerciseIndex,
+  answeredTokens,
+  onSubmit,
+}: {
+  line: ExerciseLine
+  exerciseIndex: number
+  answeredTokens: Record<string, boolean>
+  onSubmit: (tokenIndex: number, value: string) => void
+}) {
+  const nextChoiceToken = line.tokens.find(
+    (token) =>
+      token.isHidden && token.choices && !(answeredTokenKey(exerciseIndex, token.index) in answeredTokens),
+  )
+
+  if (!nextChoiceToken) return null
+
+  return (
+    <span role="group" aria-label="Choose the missing word" className="flex flex-wrap justify-center gap-2">
+      {nextChoiceToken.choices?.map((choice) => (
+        <motion.button
+          key={choice}
+          type="button"
+          whileHover={{ y: -2 }}
+          whileTap={{ scale: 0.96 }}
+          onClick={() => onSubmit(nextChoiceToken.index, choice)}
+          className="rounded-full border border-border bg-accent/60 px-4 py-1.5 font-body text-sm font-medium transition-colors hover:border-primary/50 hover:bg-primary/15 hover:text-primary"
+        >
+          {choice}
+        </motion.button>
+      ))}
+    </span>
   )
 }

@@ -73,3 +73,37 @@ describe("GameSynchronizer.findActiveLineIndex", () => {
     expect(sync.getActiveIndex()).toBe(-1)
   })
 })
+
+describe("GameSynchronizer.resync", () => {
+  function evaluateAt(sync: GameSynchronizer, time: number): void {
+    // `evaluate` is private — tick() is the public equivalent, but it also
+    // schedules a real requestAnimationFrame, which isn't available in this
+    // suite's node test environment.
+    ;(sync as unknown as { evaluate: (time: number) => void }).evaluate(time)
+  }
+
+  it("does not re-notify when time stays inside the same, already-recorded line", () => {
+    const sync = new GameSynchronizer(createStubPlayer(), buildLyrics(3))
+    const seen: number[] = []
+    sync.onChange((_line, index) => seen.push(index))
+
+    evaluateAt(sync, 15)
+    evaluateAt(sync, 16)
+
+    expect(seen).toEqual([1])
+  })
+
+  it("forces the next evaluation to notify even when the resolved index is unchanged", () => {
+    const sync = new GameSynchronizer(createStubPlayer(), buildLyrics(3))
+    const seen: number[] = []
+    sync.onChange((_line, index) => seen.push(index))
+
+    evaluateAt(sync, 15)
+    expect(seen).toEqual([1])
+
+    sync.resync()
+    evaluateAt(sync, 15)
+
+    expect(seen).toEqual([1, 1])
+  })
+})

@@ -37,7 +37,7 @@ const STEPS = [
   {
     icon: RotateCcw,
     title: "Miss one? You get a retry",
-    body: "Run out of time on a line, or get it wrong, and the video automatically rewinds 10 seconds so you can have another go.",
+    body: "Run out of time on a line and the video pauses right there — no rush. Finish the blank whenever you're ready, or hit \"Play line again\" to hear it once more.",
   },
   {
     icon: Save,
