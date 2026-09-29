@@ -1,7 +1,6 @@
 "use client"
 
 import { useEffect, useMemo, useRef, useState } from "react"
-import { toast } from "sonner"
 import type { Song } from "@/types/Song"
 import type { Difficulty } from "@/types/Difficulty"
 import type { GameMode } from "@/types/GameMode"
@@ -11,7 +10,7 @@ import { YouTubePlayer } from "@/modules/player/youtubePlayer"
 import { GameSynchronizer } from "@/modules/game/GameSynchronizer"
 import { groupLyricLines } from "@/modules/lyrics/groupLyricLines"
 import { buildVocabularyPool, generateExerciseLine } from "@/modules/game/exerciseGenerator"
-import { validateAnswer } from "@/modules/game/answerValidator"
+import { normalize, validateAnswer } from "@/modules/game/answerValidator"
 import { scoreAnswer } from "@/modules/game/scoreEngine"
 import { evaluateAchievements, toAchievement } from "@/modules/achievements/achievementEngine"
 import { usePlayerStore } from "@/stores/playerStore"
@@ -19,6 +18,7 @@ import { answeredTokenKey, useGameStore } from "@/stores/gameStore"
 import { useStatsStore } from "@/stores/statsStore"
 import { useSettingsStore } from "@/stores/settingsStore"
 import { useAchievementStore } from "@/stores/achievementStore"
+import { useReviewStore } from "@/stores/reviewStore"
 
 const YOUTUBE_STATE_PLAYING = 1
 /** Only the rewind buttons' -10s/-5s math reads this from the store, so 5Hz is plenty; GameSynchronizer tracks its own per-frame clock for lyric sync. */
@@ -112,7 +112,13 @@ export function useGameController(
     const player = new YouTubePlayer({
       elementId,
       videoId: song.youtubeId,
-      onReady: () => setIsReady(true),
+      onReady: () => {
+        // Applied once at startup, not kept in sync afterward — the only way
+        // to change it is the Settings page, which isn't reachable without
+        // unmounting this session first.
+        player.setVolume(useSettingsStore.getState().settings.volume)
+        setIsReady(true)
+      },
       onStateChange: (state) => playerStore.setIsPlaying(state === YOUTUBE_STATE_PLAYING),
     })
     playerRef.current = player
@@ -144,7 +150,6 @@ export function useGameController(
         // line, rather than a fixed countdown racing against a rewind.
         player.pause()
         useGameStore.getState().setPendingRetry(previousIndex)
-        toast("Paused — answer the blank or replay the line")
         return
       }
 
@@ -191,6 +196,35 @@ export function useGameController(
 
   function seek(seconds: number) {
     playerRef.current?.seek(seconds)
+  }
+
+  /** Slows down or speeds up playback — handy for rap verses and fast passages. */
+  function setPlaybackRate(rate: number) {
+    playerRef.current?.setPlaybackRate(rate)
+    playerStore.setPlaybackRate(rate)
+  }
+
+  /**
+   * Feeds an answered token's outcome into the cross-song weak-word pool
+   * (see reviewStore) — wrong answers get resurfaced later in Review mode;
+   * a correct answer for a word already flagged as weak nudges it toward
+   * mastery. Words never missed are never tracked here.
+   */
+  function recordWeakWordOutcome(line: ExerciseLine, token: { answer?: string }, isCorrect: boolean) {
+    if (!token.answer) return
+    const word = normalize(token.answer)
+    if (!word) return
+
+    if (isCorrect) {
+      useReviewStore.getState().recordCorrect(word)
+    } else {
+      useReviewStore.getState().recordMiss(word, {
+        songId: song.id,
+        songTitle: song.title,
+        artist: song.artist,
+        contextText: line.text,
+      })
+    }
   }
 
   function countHiddenTokens(exercises: ReturnType<typeof useGameStore.getState>["exercises"]) {
@@ -252,6 +286,7 @@ export function useGameController(
     const timeLimitMs = Math.max(1000, (line.end - line.start) * 1000)
 
     const result = scoreAnswer({ isCorrect, responseTimeMs, timeLimitMs, combo: state.combo })
+    recordWeakWordOutcome(line, token, isCorrect)
 
     gameStore.applyAnswer({
       exerciseIndex,
@@ -325,6 +360,7 @@ export function useGameController(
       if (answeredTokenKey(lineIndex, token.index) in state.answeredTokens) return
 
       const result = scoreAnswer({ isCorrect: false, responseTimeMs: 0, timeLimitMs: 0, combo: 0 })
+      recordWeakWordOutcome(line, token, false)
       gameStore.applyAnswer({
         exerciseIndex: lineIndex,
         tokenIndex: token.index,
@@ -387,6 +423,7 @@ export function useGameController(
     play,
     pause,
     seek,
+    setPlaybackRate,
     submitAnswer,
     retryLine,
     skipLine,

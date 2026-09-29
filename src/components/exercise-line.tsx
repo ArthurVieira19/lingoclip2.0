@@ -5,6 +5,7 @@ import { motion } from "framer-motion"
 import type { ExerciseLine, ExerciseToken } from "@/types/ExerciseLine"
 import { isSingleInsertOrDeleteAway, normalize } from "@/modules/game/answerValidator"
 import { answeredTokenKey } from "@/stores/gameStore"
+import { WordDefinitionPopover } from "@/components/word-definition-popover"
 import { cn } from "@/lib/utils"
 
 interface ExerciseLineViewProps {
@@ -98,29 +99,35 @@ function ExerciseTokenView({
   const [value, setValue] = useState("")
 
   if (!token.isHidden) {
-    return <span className={caption ? "text-white/90" : "text-foreground/90"}>{token.raw}</span>
+    return (
+      <WordDefinitionPopover word={token.raw} className={caption ? "text-white/90" : "text-foreground/90"}>
+        {token.raw}
+      </WordDefinitionPopover>
+    )
   }
 
   if (isAnswered) {
     return (
-      <motion.span
-        initial={{ scale: 0.85, opacity: 0 }}
-        animate={
-          isCorrect
-            ? { scale: [0.85, 1.15, 1], opacity: 1 }
-            : { scale: 1, opacity: 1, x: [0, -6, 6, -4, 4, 0] }
-        }
-        transition={{ duration: 0.4 }}
-        aria-label={`${token.raw} — ${isCorrect ? "correct" : "incorrect"}`}
-        className={cn(
-          "rounded-lg px-2 py-0.5 font-semibold",
-          isCorrect
-            ? "bg-secondary/20 text-secondary shadow-[0_0_18px_-4px_var(--glow-secondary)]"
-            : "bg-destructive/15 text-destructive",
-        )}
-      >
-        {token.raw}
-      </motion.span>
+      <WordDefinitionPopover word={token.raw}>
+        <motion.span
+          initial={{ scale: 0.85, opacity: 0 }}
+          animate={
+            isCorrect
+              ? { scale: [0.85, 1.15, 1], opacity: 1 }
+              : { scale: 1, opacity: 1, x: [0, -6, 6, -4, 4, 0] }
+          }
+          transition={{ duration: 0.4 }}
+          aria-label={`${token.raw} — ${isCorrect ? "correct" : "incorrect"}`}
+          className={cn(
+            "inline-block rounded-lg px-2 py-0.5 font-semibold",
+            isCorrect
+              ? "bg-secondary/20 text-secondary shadow-[0_0_18px_-4px_var(--glow-secondary)]"
+              : "bg-destructive/15 text-destructive",
+          )}
+        >
+          {token.raw}
+        </motion.span>
+      </WordDefinitionPopover>
     )
   }
 

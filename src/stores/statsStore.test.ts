@@ -56,4 +56,80 @@ describe("statsStore", () => {
 
     expect(useStatsStore.getState().progress.completedSongIds).toEqual(["song-1"])
   })
+
+  it("addXp grants xp without touching song statistics", () => {
+    const now = Date.now()
+    useStatsStore.getState().addXp(50, now)
+
+    const { statistics, progress } = useStatsStore.getState()
+    expect(progress.xp).toBe(50)
+    expect(progress.lastActiveAt).toBe(now)
+    expect(statistics.songsCompleted).toBe(0)
+    expect(storageService.getProgress().xp).toBe(50)
+  })
+
+  describe("streaks span review-only days, not just finished songs", () => {
+    const DAY_MS = 24 * 60 * 60 * 1000
+    const day1 = new Date("2026-01-10T12:00:00Z").getTime()
+
+    it("recordActivityDay alone builds a streak without any song statistics", () => {
+      useStatsStore.getState().recordActivityDay(day1)
+      useStatsStore.getState().recordActivityDay(day1 + DAY_MS)
+
+      const { statistics, progress } = useStatsStore.getState()
+      expect(statistics.currentStreak).toBe(2)
+      expect(statistics.songsCompleted).toBe(0)
+      expect(progress.streak).toBe(2)
+    })
+
+    it("a review day keeps a streak alive between two song-playing days", () => {
+      const store = useStatsStore.getState()
+      store.recordSongResult(
+        { songId: "song-1", score: 100, accuracy: 80, completedAt: day1, playTimeMs: 1000 },
+        100,
+        day1,
+      )
+      useStatsStore.getState().recordActivityDay(day1 + DAY_MS) // review only, day 2
+      useStatsStore.getState().recordSongResult(
+        { songId: "song-1", score: 100, accuracy: 80, completedAt: day1 + 2 * DAY_MS, playTimeMs: 1000 },
+        100,
+        day1 + 2 * DAY_MS,
+      )
+
+      expect(useStatsStore.getState().statistics.currentStreak).toBe(3)
+    })
+
+    it("does not double-count two activity calls on the same calendar day", () => {
+      useStatsStore.getState().recordActivityDay(day1)
+      useStatsStore.getState().recordActivityDay(day1 + 60_000)
+
+      expect(useStatsStore.getState().progress.activityDays).toHaveLength(1)
+      expect(useStatsStore.getState().statistics.currentStreak).toBe(1)
+    })
+  })
+
+  it("backfills activityDays from song history for progress saved before the field existed", () => {
+    const now = Date.now()
+    storageService.saveStatistics({
+      ...DEFAULT_STATISTICS,
+      history: [{ songId: "song-1", score: 100, accuracy: 80, completedAt: now, playTimeMs: 1000 }],
+    })
+    // Simulates progress persisted by an older version of the app, before
+    // `activityDays` was introduced.
+    const legacyProgress: Partial<typeof DEFAULT_PROGRESS> = { ...DEFAULT_PROGRESS }
+    delete legacyProgress.activityDays
+    window.localStorage.setItem("songgap:v1:progress", JSON.stringify(legacyProgress))
+
+    useStatsStore.getState().loadFromStorage()
+
+    expect(useStatsStore.getState().progress.activityDays).toEqual([now])
+  })
+
+  it("incrementWordsMastered bumps and persists the lifetime counter", () => {
+    useStatsStore.getState().incrementWordsMastered()
+    useStatsStore.getState().incrementWordsMastered()
+
+    expect(useStatsStore.getState().progress.wordsMastered).toBe(2)
+    expect(storageService.getProgress().wordsMastered).toBe(2)
+  })
 })

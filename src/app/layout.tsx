@@ -1,8 +1,12 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Bricolage_Grotesque, Instrument_Sans } from "next/font/google";
+import { ThemeProvider } from "next-themes";
+import { MotionConfig } from "framer-motion";
 import { AppInit } from "@/components/app-init";
-import { SiteHeader } from "@/components/site-header";
+import { MobileTabBar, SiteHeader } from "@/components/site-header";
 import { PageTransitions } from "@/components/page-transitions";
+import { ThemeSync } from "@/components/theme-sync";
+import { OfflineBanner } from "@/components/offline-banner";
 import { Toaster } from "@/components/ui/sonner";
 import "./globals.css";
 
@@ -21,13 +25,26 @@ export const metadata: Metadata = {
   description: "Learn English through listening comprehension with music.",
 };
 
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  // Lets the fixed bottom bars extend under the home indicator; they pad
+  // themselves back with env(safe-area-inset-bottom).
+  viewportFit: "cover",
+  themeColor: [
+    { media: "(prefers-color-scheme: dark)", color: "#16110d" },
+    { media: "(prefers-color-scheme: light)", color: "#f8f6f4" },
+  ],
+};
+
 export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html
       lang="en"
-      className={`${displayFont.variable} ${bodyFont.variable} dark h-full antialiased`}
+      suppressHydrationWarning
+      className={`${displayFont.variable} ${bodyFont.variable} h-full antialiased`}
     >
       <body className="relative flex min-h-full flex-col bg-background text-foreground">
         <a
@@ -36,13 +53,22 @@ export default function RootLayout({
         >
           Skip to content
         </a>
-        <div aria-hidden className="grain-overlay" />
-        <AppInit />
-        <SiteHeader />
-        <main id="main-content" className="relative flex-1">
-          <PageTransitions>{children}</PageTransitions>
-        </main>
-        <Toaster />
+        <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
+          {/* Covers framer-motion only; CSS transitions have their own
+              prefers-reduced-motion block in globals.css. */}
+          <MotionConfig reducedMotion="user">
+            <div aria-hidden className="grain-overlay" />
+            <AppInit />
+            <ThemeSync />
+            <OfflineBanner />
+            <SiteHeader />
+            <main id="main-content" className="pb-safe-bar relative flex-1 md:pb-0">
+              <PageTransitions>{children}</PageTransitions>
+            </main>
+            <MobileTabBar />
+            <Toaster position="top-center" />
+          </MotionConfig>
+        </ThemeProvider>
       </body>
     </html>
   );

@@ -9,11 +9,12 @@ export function SoundBars() {
   return (
     <div className="flex h-8 items-end gap-1.5" aria-hidden>
       {Array.from({ length: BAR_COUNT }).map((_, index) => (
+        // scaleY instead of height: same look, no layout recalculation per frame.
         <motion.span
           key={index}
-          className="w-1.5 rounded-full bg-gradient-to-t from-primary to-secondary"
-          initial={{ height: 6 }}
-          animate={{ height: [6, 28, 12, 24, 6] }}
+          className="h-8 w-1.5 origin-bottom rounded-full bg-gradient-to-t from-primary to-secondary"
+          initial={{ scaleY: 0.2 }}
+          animate={{ scaleY: [0.2, 0.9, 0.4, 0.75, 0.2] }}
           transition={{
             duration: 1.6,
             repeat: Infinity,

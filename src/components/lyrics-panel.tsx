@@ -1,9 +1,11 @@
 "use client"
 
 import { useEffect, useRef } from "react"
+import { motion } from "framer-motion"
 import type { ExerciseLine } from "@/types/ExerciseLine"
 import { ExerciseLineView } from "@/components/exercise-line"
 import { answeredTokenKey } from "@/stores/gameStore"
+import { WordDefinitionPopover } from "@/components/word-definition-popover"
 import { cn } from "@/lib/utils"
 
 interface LyricsPanelProps {
@@ -30,64 +32,87 @@ export function LyricsPanel({
   onLineClick,
   fuzzy = true,
 }: LyricsPanelProps) {
+  const scrollRef = useRef<HTMLDivElement | null>(null)
   const lineRefs = useRef<Record<number, HTMLDivElement | null>>({})
 
+  // Scrolls only this panel. `scrollIntoView` also scrolls every scrollable
+  // ancestor — on a phone that's the page itself, which yanked the video out
+  // of view on every line change.
   useEffect(() => {
-    lineRefs.current[activeExerciseIndex]?.scrollIntoView({ behavior: "smooth", block: "center" })
+    const container = scrollRef.current
+    const line = lineRefs.current[activeExerciseIndex]
+    if (!container || !line) return
+
+    const top = line.offsetTop - (container.clientHeight - line.clientHeight) / 2
+    container.scrollTo({ top: Math.max(0, top), behavior: "smooth" })
   }, [activeExerciseIndex])
 
   if (exercises.length === 0) return null
 
   return (
-    <div className="glass max-h-96 overflow-y-auto rounded-2xl px-4 py-6 sm:max-h-[28rem] lg:h-[70vh] lg:max-h-[70vh]">
-      <div className="flex flex-col gap-4">
-        {exercises.map((line, index) => {
-          const isActive = index === activeExerciseIndex
-          const isPast = index < activeExerciseIndex
+    <div className="glass overflow-hidden rounded-2xl">
+      <div
+        ref={scrollRef}
+        className="relative h-[42svh] min-h-60 overflow-y-auto overscroll-contain px-3 py-8 [mask-image:linear-gradient(to_bottom,transparent,black_2.5rem,black_calc(100%-2.5rem),transparent)] sm:h-[28rem] lg:h-[70vh]"
+      >
+        <div className="flex flex-col gap-2">
+          {exercises.map((line, index) => {
+            const isActive = index === activeExerciseIndex
+            const isPast = index < activeExerciseIndex
 
-          if (isActive) {
+            if (isActive) {
+              return (
+                <div
+                  key={line.lineIndex}
+                  ref={(el) => {
+                    lineRefs.current[index] = el
+                  }}
+                  className="relative px-3 py-3"
+                >
+                  {/* Shared layoutId: the highlight glides from the previous
+                      line to this one instead of blinking in place. */}
+                  <motion.div
+                    layoutId="lyrics-active-line"
+                    aria-hidden
+                    className="absolute inset-0 rounded-xl bg-primary/10 ring-1 ring-primary/20"
+                    transition={{ type: "spring", stiffness: 380, damping: 36 }}
+                  />
+                  <div className="relative">
+                    <ExerciseLineView
+                      line={line}
+                      exerciseIndex={index}
+                      answeredTokens={answeredTokens}
+                      onSubmit={onSubmit}
+                      fuzzy={fuzzy}
+                      hideChoicePills
+                    />
+                  </div>
+                </div>
+              )
+            }
+
             return (
               <div
                 key={line.lineIndex}
                 ref={(el) => {
                   lineRefs.current[index] = el
                 }}
-                className="rounded-xl bg-primary/10 px-3 py-2"
+                role="button"
+                tabIndex={0}
+                onClick={() => onLineClick(index)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") onLineClick(index)
+                }}
+                className={cn(
+                  "cursor-pointer rounded-xl px-3 py-2 text-center transition-colors duration-200 hover:bg-accent/50 hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring",
+                  isPast ? "text-muted-foreground/60" : "text-muted-foreground",
+                )}
               >
-                <ExerciseLineView
-                  line={line}
-                  exerciseIndex={index}
-                  answeredTokens={answeredTokens}
-                  onSubmit={onSubmit}
-                  fuzzy={fuzzy}
-                  hideChoicePills
-                />
+                <StaticLineView line={line} exerciseIndex={index} answeredTokens={answeredTokens} />
               </div>
             )
-          }
-
-          return (
-            <div
-              key={line.lineIndex}
-              ref={(el) => {
-                lineRefs.current[index] = el
-              }}
-              role="button"
-              tabIndex={0}
-              onClick={() => onLineClick(index)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter" || event.key === " ") onLineClick(index)
-              }}
-              className={cn(
-                "cursor-pointer rounded-xl px-3 py-2 text-center transition-colors duration-300",
-                isPast ? "text-muted-foreground/40" : "text-muted-foreground/70",
-                "hover:text-foreground",
-              )}
-            >
-              <StaticLineView line={line} exerciseIndex={index} answeredTokens={answeredTokens} />
-            </div>
-          )
-        })}
+          })}
+        </div>
       </div>
     </div>
   )
@@ -112,12 +137,20 @@ function StaticLineView({
     <p className="flex flex-wrap items-baseline justify-center gap-x-2 gap-y-1 font-display text-lg sm:text-xl">
       {line.tokens.map((token) => {
         if (!token.isHidden) {
-          return <span key={token.index}>{token.raw}</span>
+          return (
+            <WordDefinitionPopover key={token.index} word={token.raw} tabbable={false}>
+              {token.raw}
+            </WordDefinitionPopover>
+          )
         }
 
         const isAnswered = answeredTokenKey(exerciseIndex, token.index) in answeredTokens
         if (isAnswered) {
-          return <span key={token.index}>{token.raw}</span>
+          return (
+            <WordDefinitionPopover key={token.index} word={token.raw} tabbable={false}>
+              {token.raw}
+            </WordDefinitionPopover>
+          )
         }
 
         const blankWidth = Math.max(token.answer?.length ?? 3, 3)

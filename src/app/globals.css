@@ -51,10 +51,51 @@
 /*
  * "Marquee" theme: a midnight record-store palette — warm near-black felt
  * background, cream ink for type, and a two-bulb neon accent (coral +
- * acid lime) standing in for a lit-up club marquee. Dark by default;
- * `:root` and `.dark` share the same values on purpose.
+ * acid lime) standing in for a lit-up club marquee. Dark by default.
+ *
+ * `:root` holds the light variant (mirrored from `.dark` by flipping surface
+ * and text lightness while keeping the same hues/chroma, so brand colors —
+ * primary coral, secondary lime — read identically in both themes); `.dark`
+ * is the original, unchanged palette.
  */
-:root,
+:root {
+  --background: oklch(0.975 0.005 55);
+  --foreground: oklch(0.2 0.02 55);
+  --card: oklch(0.995 0.003 55);
+  --card-foreground: oklch(0.2 0.02 55);
+  --popover: oklch(0.995 0.003 55);
+  --popover-foreground: oklch(0.2 0.02 55);
+  --primary: oklch(0.72 0.19 40);
+  --primary-foreground: oklch(0.16 0.02 40);
+  --secondary: oklch(0.87 0.22 122);
+  --secondary-foreground: oklch(0.16 0.03 122);
+  --muted: oklch(0.94 0.015 55);
+  --muted-foreground: oklch(0.44 0.02 70);
+  --accent: oklch(0.92 0.02 55);
+  --accent-foreground: oklch(0.2 0.02 55);
+  --destructive: oklch(0.55 0.21 20);
+  --border: oklch(0.2 0.02 55 / 10%);
+  --input: oklch(0.2 0.02 55 / 8%);
+  --ring: oklch(0.6 0.19 40 / 45%);
+  --chart-1: oklch(0.72 0.19 40);
+  --chart-2: oklch(0.6 0.18 122);
+  --chart-3: oklch(0.6 0.15 70);
+  --chart-4: oklch(0.55 0.12 20);
+  --chart-5: oklch(0.5 0.05 55);
+  --radius: 1.1rem;
+  --sidebar: oklch(0.96 0.006 55);
+  --sidebar-foreground: oklch(0.2 0.02 55);
+  --sidebar-primary: oklch(0.72 0.19 40);
+  --sidebar-primary-foreground: oklch(0.16 0.02 40);
+  --sidebar-accent: oklch(0.92 0.02 55);
+  --sidebar-accent-foreground: oklch(0.2 0.02 55);
+  --sidebar-border: oklch(0.2 0.02 55 / 10%);
+  --sidebar-ring: oklch(0.6 0.19 40 / 45%);
+
+  --glow-primary: oklch(0.72 0.19 40 / 35%);
+  --glow-secondary: oklch(0.87 0.22 122 / 30%);
+}
+
 .dark {
   --background: oklch(0.16 0.014 55);
   --foreground: oklch(0.97 0.02 85);
@@ -143,6 +184,43 @@
 
   .tabular-nums {
     font-variant-numeric: tabular-nums;
+  }
+
+  /* Horizontal chip/card rows on touch screens: swipeable, no visible scrollbar. */
+  .scroll-row {
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  .scroll-row::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Space for the fixed bottom bars (tab bar / game transport) plus the home indicator. */
+  .pb-safe-bar {
+    padding-bottom: calc(4.5rem + env(safe-area-inset-bottom));
+  }
+  .safe-bottom {
+    padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+  }
+}
+
+:root {
+  --ease-out-quint: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/*
+ * MotionConfig reducedMotion="user" only reaches framer-motion. This covers
+ * everything else — CSS transitions, keyframes, Tailwind animate-* utilities.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }
 

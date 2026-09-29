@@ -9,5 +9,7 @@ export interface MediaPlayer {
   seek(seconds: number): void
   getCurrentTime(): number
   setPlaybackRate(rate: number): void
+  /** 0 (silent) to 1 (full volume) — implementations scale to their own native range. */
+  setVolume(volume: number): void
   destroy(): void
 }

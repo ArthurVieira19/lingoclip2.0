@@ -10,6 +10,9 @@ import {
   RotateCcw,
   Save,
   ArrowRight,
+  BookOpen,
+  Turtle,
+  BookOpenCheck,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -35,9 +38,24 @@ const STEPS = [
     body: "Get close enough — a missing apostrophe, a doubled letter, one letter short — and the blank confirms itself. Enter still works if you prefer it.",
   },
   {
+    icon: Turtle,
+    title: "Too fast? Slow it down",
+    body: "Rap verses and mumbled lines are fair game — drop the speed to 0.75x or 0.5x from the transport bar and the words separate out. Pitch stays natural.",
+  },
+  {
     icon: RotateCcw,
     title: "Miss one? You get a retry",
     body: "Run out of time on a line and the video pauses right there — no rush. Finish the blank whenever you're ready, or hit \"Play line again\" to hear it once more.",
+  },
+  {
+    icon: BookOpen,
+    title: "Tap any word you don't know",
+    body: "Every visible word in the lyrics is tappable — it opens the English definition, part of speech, and pronunciation right there, without stopping the song.",
+  },
+  {
+    icon: BookOpenCheck,
+    title: "Come back for the words you missed",
+    body: "Anything you get wrong is remembered and resurfaced on the Review page days later, mixed in from every song you've played — spacing them out is what makes them stick.",
   },
   {
     icon: Save,
@@ -54,7 +72,7 @@ export default function HowToPlayPage() {
           How to play
         </h1>
         <p className="mt-2 text-muted-foreground text-balance">
-          Six steps between you and your first song.
+          Everything between you and your first song — and what keeps it sticking after.
         </p>
       </div>
 

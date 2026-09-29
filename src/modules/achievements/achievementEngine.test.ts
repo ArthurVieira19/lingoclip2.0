@@ -42,6 +42,8 @@ function buildContext(overrides: {
     lastActiveAt: null,
     completedSongIds: [],
     unlockedAchievementIds: [],
+    activityDays: [],
+    wordsMastered: 0,
     ...overrides.progress,
   }
 

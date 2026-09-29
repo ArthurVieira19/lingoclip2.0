@@ -6,6 +6,7 @@ type YouTubePlayerInstance = {
   seekTo(seconds: number, allowSeekAhead: boolean): void
   getCurrentTime(): number
   setPlaybackRate(rate: number): void
+  setVolume(volume: number): void
   destroy(): void
 }
 
@@ -145,6 +146,12 @@ export class YouTubePlayer implements MediaPlayer {
 
   setPlaybackRate(rate: number): void {
     this.withPlayer((player) => player.setPlaybackRate(rate))
+  }
+
+  /** Accepts the app's 0-1 scale and converts to the YouTube API's 0-100 range. */
+  setVolume(volume: number): void {
+    const clamped = Math.round(Math.max(0, Math.min(1, volume)) * 100)
+    this.withPlayer((player) => player.setVolume(clamped))
   }
 
   destroy(): void {

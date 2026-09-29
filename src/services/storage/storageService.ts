@@ -3,6 +3,7 @@ import type { Settings } from "@/types/Settings"
 import type { Song } from "@/types/Song"
 import type { Statistics } from "@/types/Statistics"
 import type { UserProgress } from "@/types/UserProgress"
+import type { WeakWord } from "@/types/WeakWord"
 import { readJSON, removeKey, writeJSON } from "./localStorageClient"
 
 const STORAGE_KEYS = {
@@ -11,6 +12,7 @@ const STORAGE_KEYS = {
   progress: "songgap:v1:progress",
   achievements: "songgap:v1:achievements",
   customSongs: "songgap:v1:customSongs",
+  weakWords: "songgap:v1:weakWords",
 } as const
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -18,7 +20,9 @@ export const DEFAULT_SETTINGS: Settings = {
   defaultDifficulty: "beginner",
   defaultGameMode: "typing",
   fuzzyMatching: true,
-  theme: "system",
+  // Dark is the brand ("Marquee" theme, see DESIGN.md) — following the OS
+  // by default would flip most light-OS visitors out of the identity.
+  theme: "dark",
 }
 
 export const DEFAULT_STATISTICS: Statistics = {
@@ -40,6 +44,8 @@ export const DEFAULT_PROGRESS: UserProgress = {
   lastActiveAt: null,
   completedSongIds: [],
   unlockedAchievementIds: [],
+  activityDays: [],
+  wordsMastered: 0,
 }
 
 export const storageService = {
@@ -58,7 +64,10 @@ export const storageService = {
   },
 
   getProgress(): UserProgress {
-    return readJSON(STORAGE_KEYS.progress, DEFAULT_PROGRESS)
+    // Merged with defaults (not just substituted) so progress saved before a
+    // field like `activityDays`/`wordsMastered` existed still comes back
+    // valid instead of `undefined` at runtime despite the type saying `[]`/`0`.
+    return { ...DEFAULT_PROGRESS, ...readJSON(STORAGE_KEYS.progress, DEFAULT_PROGRESS) }
   },
   saveProgress(progress: UserProgress): void {
     writeJSON(STORAGE_KEYS.progress, progress)
@@ -76,6 +85,13 @@ export const storageService = {
   },
   saveCustomSongs(songs: Song[]): void {
     writeJSON(STORAGE_KEYS.customSongs, songs)
+  },
+
+  getWeakWords(): WeakWord[] {
+    return readJSON<WeakWord[]>(STORAGE_KEYS.weakWords, [])
+  },
+  saveWeakWords(weakWords: WeakWord[]): void {
+    writeJSON(STORAGE_KEYS.weakWords, weakWords)
   },
 
   clearAll(): void {

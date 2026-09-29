@@ -2,7 +2,7 @@ import type { SongResult, Statistics } from "@/types/Statistics"
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000
 
-function startOfDay(timestamp: number): number {
+export function startOfDay(timestamp: number): number {
   const d = new Date(timestamp)
   return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()
 }

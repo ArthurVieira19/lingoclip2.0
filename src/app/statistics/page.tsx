@@ -1,9 +1,10 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Flame, Lock, Music2, Star, Timer, Trophy, Zap } from "lucide-react";
+import { BookOpenCheck, Flame, Lock, Music2, Star, Timer, Trophy, Zap } from "lucide-react";
 import { useStatsStore } from "@/stores/statsStore";
 import { useAchievementStore } from "@/stores/achievementStore";
+import { useReviewStore } from "@/stores/reviewStore";
 import { ACHIEVEMENT_RULES } from "@/modules/achievements/achievementEngine";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
@@ -18,6 +19,7 @@ export default function StatisticsPage() {
   const statistics = useStatsStore((s) => s.statistics);
   const progress = useStatsStore((s) => s.progress);
   const achievements = useAchievementStore((s) => s.achievements);
+  const weakWordCount = useReviewStore((s) => s.weakWords.length);
   const unlockedIds = new Set(achievements.map((a) => a.id));
 
   return (
@@ -56,6 +58,13 @@ export default function StatisticsPage() {
         />
         <StatCard index={6} icon={<Zap />} label="XP" value={progress.xp} />
         <StatCard index={7} icon={<Zap />} label="Level" value={progress.level} />
+        <StatCard
+          index={8}
+          icon={<BookOpenCheck />}
+          label="Words mastered"
+          value={progress.wordsMastered}
+        />
+        <StatCard index={9} icon={<BookOpenCheck />} label="Words in review" value={weakWordCount} />
       </div>
 
       <Card className="glass border-0">

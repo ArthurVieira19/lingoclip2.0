@@ -2,34 +2,39 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { Plus, Search, Sparkles } from "lucide-react";
+import { motion } from "framer-motion";
+import { ArrowRight, Music2, Play, Plus, Search, Sparkles, X } from "lucide-react";
 import type { Song } from "@/types/Song";
 import type { Difficulty } from "@/types/Difficulty";
 import { SONGS, findSong } from "@/data/songs";
 import { useLibraryStore } from "@/stores/libraryStore";
 import { useStatsStore } from "@/stores/statsStore";
 import { hashStringToSeed } from "@/modules/game/seededRandom";
-import { SongCard } from "@/components/song-card";
+import { DIFFICULTY_STYLES, SongCard, SongThumbnail } from "@/components/song-card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
 
 type SortKey = "title" | "artist" | "difficulty";
 type DifficultyFilter = "all" | Difficulty;
 
-const DIFFICULTY_FILTERS: DifficultyFilter[] = [
-  "all",
-  "beginner",
-  "intermediate",
-  "advanced",
-  "expert",
-];
+const DIFFICULTY_ORDER: Difficulty[] = ["beginner", "intermediate", "advanced", "expert"];
+const DIFFICULTY_FILTERS: DifficultyFilter[] = ["all", ...DIFFICULTY_ORDER];
+
+/** Curated rows only earn their space once the library is big enough that they aren't just repeating "All songs". */
+const CURATED_MIN_LIBRARY_SIZE = 5;
 
 function getDailyChallenge(songs: Song[]): Song | undefined {
-  if (songs.length === 0) return undefined
-  const today = new Date()
-  const dayKey = `${today.getFullYear()}-${today.getMonth()}-${today.getDate()}`
-  const index = Math.abs(hashStringToSeed(dayKey)) % songs.length
-  return songs[index]
+  if (songs.length === 0) return undefined;
+  const today = new Date();
+  const dayKey = `${today.getFullYear()}-${today.getMonth()}-${today.getDate()}`;
+  const index = Math.abs(hashStringToSeed(dayKey)) % songs.length;
+  return songs[index];
+}
+
+function difficultyRank(difficulty: string): number {
+  const rank = DIFFICULTY_ORDER.indexOf(difficulty as Difficulty);
+  return rank === -1 ? DIFFICULTY_ORDER.length : rank;
 }
 
 export default function LibraryPage() {
@@ -39,19 +44,24 @@ export default function LibraryPage() {
   const completedSongIds = useStatsStore((s) => s.progress.completedSongIds);
 
   const customSongIds = useMemo(() => new Set(customSongs.map((song) => song.id)), [customSongs]);
+  const deleteIfCustom = (song: Song) => (customSongIds.has(song.id) ? removeSong : undefined);
 
   const [search, setSearch] = useState("");
   const [difficultyFilter, setDifficultyFilter] = useState<DifficultyFilter>("all");
   const [sortKey, setSortKey] = useState<SortKey>("title");
 
   const allSongs = useMemo(() => [...SONGS, ...customSongs], [customSongs]);
+  const showCurated = allSongs.length >= CURATED_MIN_LIBRARY_SIZE;
 
-  const dailyChallenge = useMemo(() => getDailyChallenge(allSongs), [allSongs]);
+  const dailyChallenge = useMemo(
+    () => (allSongs.length > 1 ? getDailyChallenge(allSongs) : undefined),
+    [allSongs],
+  );
 
   const recentlyPlayed = useMemo(() => {
     const seen = new Set<string>();
     const recent: Song[] = [];
-    for (let i = history.length - 1; i >= 0 && recent.length < 4; i--) {
+    for (let i = history.length - 1; i >= 0 && recent.length < 6; i--) {
       const songId = history[i].songId;
       if (seen.has(songId)) continue;
       seen.add(songId);
@@ -61,10 +71,10 @@ export default function LibraryPage() {
     return recent;
   }, [history, customSongs]);
 
-  const recommended = useMemo(() => {
-    const notCompleted = allSongs.filter((song) => !completedSongIds.includes(song.id));
-    return (notCompleted.length > 0 ? notCompleted : allSongs).slice(0, 4);
-  }, [allSongs, completedSongIds]);
+  const recommended = useMemo(
+    () => allSongs.filter((song) => !completedSongIds.includes(song.id)).slice(0, 6),
+    [allSongs, completedSongIds],
+  );
 
   const filteredSongs = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -78,147 +88,262 @@ export default function LibraryPage() {
           song.artist.toLowerCase().includes(query),
       )
       .sort((a, b) => {
-        if (sortKey === "difficulty") return a.difficulty.localeCompare(b.difficulty);
+        if (sortKey === "difficulty") return difficultyRank(a.difficulty) - difficultyRank(b.difficulty);
         return a[sortKey].localeCompare(b[sortKey]);
       });
   }, [allSongs, search, difficultyFilter, sortKey]);
 
+  if (allSongs.length === 0) {
+    return <EmptyLibraryOnboarding />;
+  }
+
+  const isFiltering = search.trim().length > 0 || difficultyFilter !== "all";
+
   return (
-    <div className="mx-auto max-w-5xl px-4 py-12">
-      <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
+    <div className="mx-auto max-w-5xl px-4 py-8 md:py-12">
+      <div className="mb-6 flex items-end justify-between gap-4 md:mb-8">
         <div>
-          <h1 className="font-display text-3xl font-semibold tracking-tight">Library</h1>
-          <p className="mt-1 text-muted-foreground">Pick a track and start filling in the gaps.</p>
+          <h1 className="font-display text-2xl font-semibold tracking-tight md:text-3xl">Library</h1>
+          <p className="mt-1 text-sm text-muted-foreground md:text-base">
+            {allSongs.length} {allSongs.length === 1 ? "song" : "songs"} · pick one and fill in the gaps.
+          </p>
         </div>
         <Button
-          variant="outline"
-          className="gap-1.5"
+          className="h-10 shrink-0 gap-1.5 rounded-full px-4"
           render={<Link href="/library/add" />}
           nativeButton={false}
         >
-          <Plus aria-hidden className="size-4" /> Add song
+          <Plus aria-hidden className="size-4" />
+          <span className="hidden sm:inline">Add song</span>
+          <span className="sm:hidden">Add</span>
         </Button>
       </div>
 
-      {dailyChallenge && (
-        <Section title="Daily challenge" icon={<Sparkles className="size-4" />}>
-          <div className="max-w-xs">
-            <SongCard
-              song={dailyChallenge}
-              onDelete={customSongIds.has(dailyChallenge.id) ? removeSong : undefined}
-            />
-          </div>
-        </Section>
-      )}
+      {dailyChallenge && !isFiltering && <DailyChallenge song={dailyChallenge} />}
 
-      {recentlyPlayed.length > 0 && (
+      {showCurated && !isFiltering && recentlyPlayed.length > 0 && (
         <Section title="Continue playing">
-          <SongGrid songs={recentlyPlayed} customSongIds={customSongIds} onDelete={removeSong} />
+          <SongRow songs={recentlyPlayed} deleteFor={deleteIfCustom} />
         </Section>
       )}
 
-      {recommended.length > 0 && (
-        <Section title="Recommended for you">
-          <SongGrid songs={recommended} customSongIds={customSongIds} onDelete={removeSong} />
+      {showCurated && !isFiltering && recommended.length > 0 && (
+        <Section title="Not played yet">
+          <SongRow songs={recommended} deleteFor={deleteIfCustom} />
         </Section>
       )}
 
       <Section title="All songs">
-        <div className="mb-5 flex flex-wrap items-center gap-3">
-          <div className="relative flex-1 min-w-48">
+        <div className="mb-4 flex flex-col gap-3">
+          <div className="relative">
             <Search
               aria-hidden
-              className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
+              className="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-muted-foreground"
             />
             <Input
+              type="search"
               aria-label="Search songs by title or artist"
               placeholder="Search by title or artist…"
-              className="pl-9"
+              className="h-11 rounded-full pr-10 pl-10"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
-          </div>
-
-          <div role="group" aria-label="Filter by difficulty" className="flex flex-wrap gap-1.5">
-            {DIFFICULTY_FILTERS.map((level) => (
+            {search && (
               <button
-                key={level}
-                aria-pressed={difficultyFilter === level}
-                onClick={() => setDifficultyFilter(level)}
-                className={
-                  difficultyFilter === level
-                    ? "rounded-full bg-primary px-3 py-1 text-sm text-primary-foreground"
-                    : "rounded-full border border-border px-3 py-1 text-sm text-muted-foreground hover:bg-accent"
-                }
+                type="button"
+                onClick={() => setSearch("")}
+                aria-label="Clear search"
+                className="absolute top-1/2 right-1.5 flex size-8 -translate-y-1/2 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
               >
-                {level}
+                <X aria-hidden className="size-4" />
               </button>
-            ))}
+            )}
           </div>
 
-          <select
-            aria-label="Sort songs by"
-            value={sortKey}
-            onChange={(e) => setSortKey(e.target.value as SortKey)}
-            className="rounded-md border border-input bg-input/30 px-2 py-1.5 text-sm outline-none"
-          >
-            <option value="title">Sort: Title</option>
-            <option value="artist">Sort: Artist</option>
-            <option value="difficulty">Sort: Difficulty</option>
-          </select>
+          <div className="flex items-center gap-2">
+            <div
+              role="group"
+              aria-label="Filter by difficulty"
+              className="scroll-row -mx-4 flex flex-1 gap-1.5 overflow-x-auto px-4 sm:mx-0 sm:px-0"
+            >
+              {DIFFICULTY_FILTERS.map((level) => {
+                const isActive = difficultyFilter === level;
+                return (
+                  <button
+                    key={level}
+                    type="button"
+                    aria-pressed={isActive}
+                    onClick={() => setDifficultyFilter(level)}
+                    className={cn(
+                      "relative min-h-9 shrink-0 rounded-full px-3.5 text-sm capitalize transition-colors duration-200",
+                      isActive
+                        ? "text-primary-foreground"
+                        : "border border-border text-muted-foreground hover:bg-accent hover:text-foreground",
+                    )}
+                  >
+                    {isActive && (
+                      <motion.span
+                        layoutId="library-filter-pill"
+                        aria-hidden
+                        className="absolute inset-0 rounded-full bg-primary"
+                        transition={{ type: "spring", stiffness: 500, damping: 40 }}
+                      />
+                    )}
+                    <span className="relative">{level}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            <select
+              aria-label="Sort songs by"
+              value={sortKey}
+              onChange={(e) => setSortKey(e.target.value as SortKey)}
+              className="h-9 shrink-0 rounded-full border border-input bg-input/30 px-3 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+            >
+              <option value="title">Title</option>
+              <option value="artist">Artist</option>
+              <option value="difficulty">Difficulty</option>
+            </select>
+          </div>
         </div>
 
         {filteredSongs.length > 0 ? (
-          <SongGrid songs={filteredSongs} customSongIds={customSongIds} onDelete={removeSong} />
+          <div className="grid grid-cols-2 gap-3 sm:gap-5 lg:grid-cols-3">
+            {filteredSongs.map((song, index) => (
+              <SongCard key={song.id} song={song} index={index} onDelete={deleteIfCustom(song)} />
+            ))}
+          </div>
         ) : (
-          <p className="py-10 text-center text-muted-foreground">
-            No songs match your search — try a different term or add your own.
-          </p>
+          <div className="glass flex flex-col items-center gap-3 rounded-2xl px-4 py-10 text-center">
+            <p className="text-muted-foreground">No songs match that search.</p>
+            <Button
+              variant="outline"
+              className="rounded-full"
+              onClick={() => {
+                setSearch("");
+                setDifficultyFilter("all");
+              }}
+            >
+              Clear filters
+            </Button>
+          </div>
         )}
       </Section>
     </div>
   );
 }
 
-function Section({
-  title,
-  icon,
-  children,
-}: {
-  title: string;
-  icon?: React.ReactNode;
-  children: React.ReactNode;
-}) {
+/** A distinct horizontal feature card, so the day's pick doesn't read as just another grid tile. */
+function DailyChallenge({ song }: { song: Song }) {
+  const difficultyClass = DIFFICULTY_STYLES[song.difficulty] ?? DIFFICULTY_STYLES.beginner;
+
   return (
-    <section className="mb-10">
-      <h2 className="mb-3 flex items-center gap-1.5 font-display text-lg font-semibold">
-        <span aria-hidden>{icon}</span>
-        {title}
-      </h2>
-      {children}
-    </section>
+    <motion.section
+      aria-label="Daily challenge"
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+      className="mb-8 md:mb-10"
+    >
+      <Link
+        href={`/game/${song.id}`}
+        className="group glass relative flex flex-col overflow-hidden rounded-2xl transition-shadow duration-300 hover:shadow-[0_24px_48px_-28px_var(--glow-primary)] sm:flex-row"
+      >
+        <div
+          aria-hidden
+          className="glow-blob -top-16 -right-10 size-56 bg-primary/25 opacity-70 transition-opacity duration-500 group-hover:opacity-100"
+        />
+        <SongThumbnail song={song} className="sm:w-72 sm:shrink-0" />
+        <div className="relative flex flex-1 flex-col justify-center gap-3 p-4 sm:p-6">
+          <span className="flex items-center gap-1.5 text-xs font-medium text-primary">
+            <Sparkles aria-hidden className="size-3.5" />
+            Today&apos;s pick
+          </span>
+          <div className="min-w-0">
+            <h2 className="truncate font-display text-xl font-semibold sm:text-2xl">{song.title}</h2>
+            <p className="truncate text-sm text-muted-foreground">{song.artist}</p>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="inline-flex h-10 items-center gap-2 rounded-full bg-primary px-4 text-sm font-semibold text-primary-foreground transition-transform duration-150 group-active:scale-[0.97]">
+              <Play aria-hidden className="size-4" fill="currentColor" />
+              Play now
+            </span>
+            <span className={cn("rounded-full px-2 py-0.5 text-[0.65rem] font-semibold capitalize", difficultyClass)}>
+              {song.difficulty}
+            </span>
+          </div>
+        </div>
+      </Link>
+    </motion.section>
   );
 }
 
-function SongGrid({
+/** Swipeable on phones (with the next card peeking in to signal it scrolls); a plain grid from sm up. */
+function SongRow({
   songs,
-  customSongIds,
-  onDelete,
+  deleteFor,
 }: {
   songs: Song[];
-  customSongIds: Set<string>;
-  onDelete: (songId: string) => void;
+  deleteFor: (song: Song) => ((songId: string) => void) | undefined;
 }) {
   return (
-    <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+    <div className="scroll-row -mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-1 sm:mx-0 sm:grid sm:grid-cols-2 sm:gap-5 sm:overflow-visible sm:px-0 lg:grid-cols-3">
       {songs.map((song, index) => (
         <SongCard
           key={song.id}
           song={song}
           index={index}
-          onDelete={customSongIds.has(song.id) ? onDelete : undefined}
+          onDelete={deleteFor(song)}
+          className="w-[62vw] max-w-64 shrink-0 snap-start sm:w-auto sm:max-w-none"
         />
       ))}
     </div>
+  );
+}
+
+/**
+ * There's no bundled song catalog (see data/songs.ts — licensing means the
+ * app ships empty by design), so a brand-new player's library is a blank
+ * grid with nothing to explain it. This replaces that confusing first
+ * impression with a direct explanation and the one action that unblocks it.
+ */
+function EmptyLibraryOnboarding() {
+  return (
+    <div className="mx-auto flex max-w-md flex-col items-center px-4 py-20 text-center md:py-24">
+      <motion.div
+        initial={{ scale: 0.7, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        transition={{ type: "spring", stiffness: 260, damping: 20 }}
+        className="glass flex size-16 items-center justify-center rounded-2xl text-primary"
+      >
+        <Music2 aria-hidden className="size-7" />
+      </motion.div>
+
+      <h1 className="mt-5 font-display text-2xl font-semibold">Your library is empty</h1>
+      <p className="mt-2 text-muted-foreground text-pretty">
+        SongGap doesn&apos;t ship with songs built in — pick any track on YouTube, paste the link, and
+        we&apos;ll try to find synced lyrics for it automatically. Takes about a minute.
+      </p>
+
+      <Button
+        size="lg"
+        className="group mt-6 h-11 gap-2 rounded-full px-6"
+        render={<Link href="/library/add" />}
+        nativeButton={false}
+      >
+        Add your first song
+        <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />
+      </Button>
+    </div>
+  );
+}
+
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section className="mb-8 md:mb-10">
+      <h2 className="mb-3 font-display text-lg font-semibold">{title}</h2>
+      {children}
+    </section>
   );
 }

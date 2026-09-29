@@ -10,6 +10,7 @@ function createStubPlayer(): MediaPlayer {
     seek: () => {},
     getCurrentTime: () => 0,
     setPlaybackRate: () => {},
+    setVolume: () => {},
     destroy: () => {},
   }
 }
