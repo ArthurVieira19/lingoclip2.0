@@ -237,19 +237,27 @@ export function ExerciseChoicesView({
   if (!nextChoiceToken) return null
 
   return (
-    <span role="group" aria-label="Choose the missing word" className="flex flex-wrap justify-center gap-2">
-      {nextChoiceToken.choices?.map((choice) => (
+    <div
+      role="group"
+      aria-label="Choose the missing word"
+      // Keyed by token so a new blank's options re-run their entrance.
+      key={`${exerciseIndex}:${nextChoiceToken.index}`}
+      className="grid grid-cols-2 gap-2 sm:gap-3"
+    >
+      {nextChoiceToken.choices?.map((choice, i) => (
         <motion.button
           key={choice}
           type="button"
-          whileHover={{ y: -2 }}
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1], delay: i * 0.03 }}
           whileTap={{ scale: 0.96 }}
           onClick={() => onSubmit(nextChoiceToken.index, choice)}
-          className="rounded-full border border-border bg-accent/60 px-4 py-1.5 font-body text-sm font-medium transition-colors hover:border-primary/50 hover:bg-primary/15 hover:text-primary"
+          className="min-h-12 truncate rounded-xl border border-border bg-accent/60 px-4 font-body text-base font-medium transition-colors duration-150 hover:border-primary/50 hover:bg-primary/15 hover:text-primary"
         >
           {choice}
         </motion.button>
       ))}
-    </span>
+    </div>
   )
 }

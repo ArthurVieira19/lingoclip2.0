@@ -30,13 +30,15 @@ export const DIFFICULTY_STYLES: Record<string, string> = {
 const THUMBNAIL_FALLBACKS = ["mqdefault", "default"] as const;
 
 export function SongThumbnail({ song, className }: { song: Song; className?: string }) {
-  const [attempt, setAttempt] = useState(0);
+  // Attempt 0 is the song's own thumbnail; skip straight to the YouTube
+  // fallbacks when there isn't one.
+  const [attempt, setAttempt] = useState(song.thumbnail ? 0 : 1);
   const exhausted = attempt > THUMBNAIL_FALLBACKS.length;
 
   const src =
-    attempt === 0 && song.thumbnail
+    attempt === 0
       ? song.thumbnail
-      : `https://i.ytimg.com/vi/${song.youtubeId}/${THUMBNAIL_FALLBACKS[Math.max(0, attempt - 1)] ?? "default"}.jpg`;
+      : `https://i.ytimg.com/vi/${song.youtubeId}/${THUMBNAIL_FALLBACKS[attempt - 1]}.jpg`;
 
   return (
     <div className={cn("relative aspect-video overflow-hidden bg-gradient-to-br from-primary/25 via-muted to-secondary/15", className)}>

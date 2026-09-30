@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { PartyPopper, Sparkles } from "lucide-react";
+import { PartyPopper, RotateCcw, Sparkles } from "lucide-react";
 import { useGameStore } from "@/stores/gameStore";
 import { findSong } from "@/data/songs";
 import { useLibraryStore } from "@/stores/libraryStore";
 import { Button } from "@/components/ui/button";
+import { CelebrationBurst } from "@/components/celebration-burst";
 import { useCountUp } from "@/hooks/useCountUp";
 
 export default function ResultsPage() {
@@ -31,14 +32,17 @@ export default function ResultsPage() {
     <div className="relative mx-auto flex max-w-xl flex-col items-center overflow-hidden px-4 py-16 text-center">
       <div aria-hidden className="glow-blob left-1/2 top-0 size-72 -translate-x-1/2 bg-secondary/30" />
 
-      <motion.div
-        initial={{ scale: 0.7, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        transition={{ type: "spring", stiffness: 200, damping: 14 }}
-        className="glass relative flex size-16 items-center justify-center rounded-2xl text-secondary"
-      >
-        <PartyPopper aria-hidden className="size-7" />
-      </motion.div>
+      <div className="relative">
+        <CelebrationBurst />
+        <motion.div
+          initial={{ scale: 0.7, opacity: 0, rotate: -12 }}
+          animate={{ scale: 1, opacity: 1, rotate: 0 }}
+          transition={{ type: "spring", stiffness: 260, damping: 18 }}
+          className="glass relative flex size-16 items-center justify-center rounded-2xl text-secondary shadow-[0_0_40px_-10px_var(--glow-secondary)]"
+        >
+          <PartyPopper aria-hidden className="size-7" />
+        </motion.div>
+      </div>
 
       <h1 className="relative mt-5 font-display text-2xl font-semibold">
         {song ? song.title : "Song complete"}
@@ -64,12 +68,32 @@ export default function ResultsPage() {
         />
       </div>
 
-      <div className="relative mt-8 flex gap-3">
-        <Button render={<Link href="/library" />} nativeButton={false}>
-          Play another song
+      <div className="relative mt-8 flex w-full flex-col gap-3 sm:w-auto sm:flex-row">
+        {song && (
+          <Button
+            className="h-11 gap-2 rounded-full px-6 text-base"
+            render={<Link href={`/game/${song.id}`} />}
+            nativeButton={false}
+          >
+            <RotateCcw aria-hidden className="size-4" />
+            Play again
+          </Button>
+        )}
+        <Button
+          variant="outline"
+          className="h-11 rounded-full px-6"
+          render={<Link href="/library" />}
+          nativeButton={false}
+        >
+          Another song
         </Button>
-        <Button variant="outline" render={<Link href="/statistics" />} nativeButton={false}>
-          View statistics
+        <Button
+          variant="ghost"
+          className="h-11 rounded-full px-6"
+          render={<Link href="/statistics" />}
+          nativeButton={false}
+        >
+          Statistics
         </Button>
       </div>
     </div>

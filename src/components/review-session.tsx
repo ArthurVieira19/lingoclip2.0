@@ -97,14 +97,24 @@ export function ReviewSession({
   }
 
   return (
-    <div className="mx-auto flex max-w-xl flex-col gap-6 px-4 py-12">
-      <div className="flex items-center justify-between text-sm text-muted-foreground">
-        <span>
-          Word {index + 1} of {words.length}
-        </span>
-        <span>
-          From <span className="font-medium text-foreground">{card.songTitle}</span> — {card.artist}
-        </span>
+    <div className="mx-auto flex max-w-xl flex-col gap-5 px-4 py-8 md:py-12">
+      <div className="flex flex-col gap-2">
+        <div className="flex items-center justify-between gap-3 text-sm text-muted-foreground">
+          <span className="shrink-0 tabular-nums">
+            {index + 1} / {words.length}
+          </span>
+          <span className="truncate">
+            From <span className="font-medium text-foreground">{card.songTitle}</span> — {card.artist}
+          </span>
+        </div>
+        <div aria-hidden className="h-1 overflow-hidden rounded-full bg-muted">
+          <motion.div
+            className="h-full origin-left rounded-full bg-primary"
+            initial={false}
+            animate={{ scaleX: (index + (feedback ? 1 : 0)) / words.length }}
+            transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+          />
+        </div>
       </div>
 
       <AnimatePresence mode="wait">
@@ -113,8 +123,12 @@ export function ReviewSession({
           initial={{ opacity: 0, x: 24 }}
           animate={{ opacity: 1, x: 0 }}
           exit={{ opacity: 0, x: -24 }}
-          transition={{ duration: 0.25 }}
-          className="glass rounded-2xl px-6 py-10 text-center"
+          transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
+          className={cn(
+            "glass rounded-2xl px-5 py-8 text-center ring-2 ring-transparent transition-[box-shadow] duration-300 sm:px-6 sm:py-10",
+            feedback?.status === "correct" && "shadow-[0_0_40px_-12px_var(--glow-secondary)] ring-secondary/50",
+            feedback?.status === "incorrect" && "ring-destructive/40",
+          )}
         >
           {blankIndices.size > 0 ? (
             <p className="mb-6 flex flex-wrap items-center justify-center gap-x-2 gap-y-1 font-display text-xl sm:text-2xl">
@@ -178,7 +192,7 @@ export function ReviewSession({
                 <button
                   type="submit"
                   disabled={value.trim().length === 0}
-                  className="rounded-full bg-primary px-5 py-2 text-sm font-semibold text-primary-foreground transition-transform disabled:opacity-40 enabled:hover:scale-105"
+                  className="min-h-11 rounded-full bg-primary px-7 text-base font-semibold text-primary-foreground transition-transform duration-150 disabled:opacity-40 enabled:hover:scale-[1.03] enabled:active:scale-95"
                 >
                   Check
                 </button>

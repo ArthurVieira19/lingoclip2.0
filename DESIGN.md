@@ -157,6 +157,24 @@ SongGap uses a hybrid of translucency and soft ambient shadow rather than a step
 
 ### Navigation
 - **Style:** `.glass` sticky header, wordmark in two-tone type ("Song" in foreground, "Gap" in primary coral), flat text links with a muted→foreground hover shift, no underline
+- **Active state:** a pill (`bg-accent`) that glides between links via a shared framer-motion `layoutId`
+- **Below `md`:** the header keeps only the wordmark and settings; primary nav moves to a fixed `.glass` bottom tab bar (icon + label, ≥48px targets, `env(safe-area-inset-bottom)` padding). The tab bar is hidden on `/game/*`, where the game's transport bar owns the bottom edge instead.
+
+### Game transport bar
+- One bar holds every playback control: rewind 10s/5s, a single Play/Pause toggle (the screen's one coral spotlight), speed, skip — plus a full-width progress bar with an "n/total words" count.
+- Fixed to the bottom on phones (thumb reach); an inline `.glass` bar from `lg` up.
+- Per-answer feedback floats next to the score chip (`+150` lime / `miss` ember) — never a toast.
+
+## 5b. Motion
+
+- **Durations:** 150–250ms for state changes; ~0.9s only for one-shot celebrations (results burst, level-progress fill).
+- **Easing:** `--ease-out-quint` (`cubic-bezier(0.22, 1, 0.36, 1)`) as the default; springs only for `layoutId` glides (nav pill, active lyric line). No bounce/elastic curves.
+- **Signature motion:** the active-lyric highlight glides from line to line as the song advances.
+- **Reduced motion:** `MotionConfig reducedMotion="user"` in the root layout covers framer-motion; a `prefers-reduced-motion` block in `globals.css` covers CSS transitions and keyframes. Animate `transform`/`opacity` (e.g. `scaleX` for progress bars), not `width`/`height`.
+
+## 5c. Light theme
+
+Optional, via Settings (dark stays the default). Surfaces flip lightness but keep brand hues. Exception: **Acid Lime is darkened to `oklch(0.56 0.17 130)` with near-white foreground** — at its dark-theme lightness it's ~1.5:1 as text on a light surface.
 
 ## 6. Do's and Don'ts
 

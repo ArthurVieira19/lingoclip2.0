@@ -56,6 +56,7 @@ export function GameScreenLoader({ songId }: { songId: string }) {
     return (
       <DifficultySelector
         song={song}
+        onBack={() => setMode(null)}
         onSelect={(selected) => {
           updateSettings({ defaultDifficulty: selected });
           setDifficulty(selected);

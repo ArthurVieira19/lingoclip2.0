@@ -5,8 +5,7 @@ import { motion } from "framer-motion";
 import { ArrowRight, BookOpenCheck, Flame, Zap } from "lucide-react";
 import { useStatsStore } from "@/stores/statsStore";
 import { useReviewStore } from "@/stores/reviewStore";
-
-const XP_PER_LEVEL = 1000;
+import { XP_PER_LEVEL } from "@/modules/stats/xpEngine";
 
 /**
  * Returning players land on the marketing hero every time; this gives them

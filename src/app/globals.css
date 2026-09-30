@@ -67,8 +67,10 @@
   --popover-foreground: oklch(0.2 0.02 55);
   --primary: oklch(0.72 0.19 40);
   --primary-foreground: oklch(0.16 0.02 40);
-  --secondary: oklch(0.87 0.22 122);
-  --secondary-foreground: oklch(0.16 0.03 122);
+  /* Acid lime at dark-theme lightness is ~1.5:1 as text on near-white; this
+     darker lime keeps the hue but clears 4.5:1 both as text and behind white text. */
+  --secondary: oklch(0.56 0.17 130);
+  --secondary-foreground: oklch(0.99 0.01 122);
   --muted: oklch(0.94 0.015 55);
   --muted-foreground: oklch(0.44 0.02 70);
   --accent: oklch(0.92 0.02 55);

@@ -1,4 +1,4 @@
-const XP_PER_LEVEL = 1000
+export const XP_PER_LEVEL = 1000
 
 export function calculateLevel(xp: number): number {
   return Math.floor(Math.max(0, xp) / XP_PER_LEVEL) + 1

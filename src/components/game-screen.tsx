@@ -51,6 +51,12 @@ export function GameScreen({
 
   const activeLine = exercises[activeExerciseIndex];
   const isPausedForRetry = pendingRetryLineIndex !== null;
+  // Dense lines fall back to typing even in Choice mode (see
+  // exerciseGenerator's forcedTyping), so check for real choices to show.
+  const hasPendingChoice =
+    activeLine?.tokens.some(
+      (token) => token.choices && !(`${activeExerciseIndex}:${token.index}` in answeredTokens),
+    ) ?? false;
 
   const totalHidden = exercises.reduce(
     (sum, exercise) => sum + exercise.tokens.filter((token) => token.isHidden).length,
@@ -82,7 +88,8 @@ export function GameScreen({
   }
 
   return (
-    <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 pt-4 pb-4 lg:gap-5 lg:py-8">
+    // Extra bottom clearance on phones: the fixed transport bar is taller than the tab bar that main's padding accounts for.
+    <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 pt-4 pb-10 lg:gap-5 lg:py-8">
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
           <h1 className="truncate font-display text-lg font-semibold lg:text-xl">{song.title}</h1>
@@ -154,8 +161,8 @@ export function GameScreen({
             )}
           </AnimatePresence>
 
-          {mode === "multipleChoice" && activeLine && (
-            <div className="glass rounded-2xl px-4 py-5">
+          {mode === "multipleChoice" && activeLine && hasPendingChoice && (
+            <div className="glass rounded-2xl p-3 sm:p-4">
               <ExerciseChoicesView
                 line={activeLine}
                 exerciseIndex={activeExerciseIndex}

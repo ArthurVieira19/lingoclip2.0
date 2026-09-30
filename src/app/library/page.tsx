@@ -164,7 +164,7 @@ export default function LibraryPage() {
             <div
               role="group"
               aria-label="Filter by difficulty"
-              className="scroll-row -mx-4 flex flex-1 gap-1.5 overflow-x-auto px-4 sm:mx-0 sm:px-0"
+              className="scroll-row -ml-4 flex min-w-0 flex-1 gap-1.5 overflow-x-auto pl-4 sm:ml-0 sm:pl-0"
             >
               {DIFFICULTY_FILTERS.map((level) => {
                 const isActive = difficultyFilter === level;

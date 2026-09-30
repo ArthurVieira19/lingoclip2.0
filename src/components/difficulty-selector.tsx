@@ -1,13 +1,13 @@
 "use client"
 
 import { useMemo } from "react"
-import { motion } from "framer-motion"
 import { Skull, Smile, Meh, Frown } from "lucide-react"
 import type { Song } from "@/types/Song"
 import type { Difficulty } from "@/types/Difficulty"
 import { estimateHiddenWordCounts } from "@/modules/game/exerciseGenerator"
 import { groupLyricLines } from "@/modules/lyrics/groupLyricLines"
-import { cn } from "@/lib/utils"
+import { useSettingsStore } from "@/stores/settingsStore"
+import { SetupOption, SetupStep } from "@/components/setup-step"
 
 interface DifficultyOption {
   value: Difficulty
@@ -46,49 +46,32 @@ const DIFFICULTY_OPTIONS: DifficultyOption[] = [
 export function DifficultySelector({
   song,
   onSelect,
+  onBack,
 }: {
   song: Song
   onSelect: (difficulty: Difficulty) => void
+  onBack?: () => void
 }) {
   const counts = useMemo(() => estimateHiddenWordCounts(groupLyricLines(song.lyrics)), [song])
   const total = counts.expert
+  const lastUsed = useSettingsStore((s) => s.settings.defaultDifficulty)
 
   return (
-    <div className="mx-auto flex max-w-xl flex-col gap-8 px-4 py-16">
-      <div className="text-center">
-        <h1 className="font-display text-2xl font-semibold">{song.title}</h1>
-        <p className="text-sm text-muted-foreground">{song.artist}</p>
-        <p className="mt-4 text-sm text-muted-foreground">Choose a difficulty to start</p>
-      </div>
-
+    <SetupStep song={song} step={2} totalSteps={2} question="Choose a difficulty to start" onBack={onBack}>
       <div role="group" aria-label="Choose a difficulty" className="flex flex-col gap-3">
         {DIFFICULTY_OPTIONS.map(({ value, label, icon, className }, index) => (
-          <motion.button
+          <SetupOption
             key={value}
-            type="button"
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.35, ease: "easeOut", delay: index * 0.06 }}
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
+            index={index}
+            icon={icon}
+            label={label}
+            description={`Fill in ${counts[value]} of ${total} words`}
+            className={className}
+            badge={value === lastUsed ? "Last used" : undefined}
             onClick={() => onSelect(value)}
-            className={cn(
-              "flex items-center gap-4 rounded-2xl px-6 py-5 text-left shadow-lg transition-shadow hover:shadow-xl",
-              className,
-            )}
-          >
-            <span aria-hidden>{icon}</span>
-            <div className="flex flex-col gap-0.5">
-              <span className="font-display text-lg font-bold tracking-wide uppercase">
-                {label}
-              </span>
-              <span className="text-sm font-medium opacity-90">
-                Fill in {counts[value]} of {total} words
-              </span>
-            </div>
-          </motion.button>
+          />
         ))}
       </div>
-    </div>
+    </SetupStep>
   )
 }

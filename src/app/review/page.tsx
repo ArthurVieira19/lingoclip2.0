@@ -93,7 +93,11 @@ function ReviewLanding({
       </div>
 
       {dueCount > 0 ? (
-        <Button className="mt-6" onClick={onStart}>
+        <Button
+          size="lg"
+          className="mt-6 h-11 rounded-full px-7 text-base shadow-[0_0_32px_-8px_var(--glow-primary)] transition-[transform,background-color] duration-150 active:scale-[0.97]"
+          onClick={onStart}
+        >
           Start review
         </Button>
       ) : (

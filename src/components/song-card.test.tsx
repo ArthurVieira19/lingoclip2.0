@@ -27,20 +27,27 @@ describe("SongCard", () => {
     expect(screen.getByRole("link")).toHaveAttribute("href", "/game/test-song")
   })
 
-  it("falls back through lower-resolution thumbnails when one fails to load", () => {
-    render(<SongCard song={song} />)
-    const img = screen.getByRole("img", { name: "Test Song" }) as HTMLImageElement
-    expect(img.src).toBe(song.thumbnail)
+  it("falls back through lower-resolution thumbnails, then to a placeholder", () => {
+    const { container } = render(<SongCard song={song} />)
+    const img = () => container.querySelector("img") as HTMLImageElement | null
+    expect(img()?.src).toBe(song.thumbnail)
 
-    fireEvent.error(img)
-    expect(img.src).toBe("https://i.ytimg.com/vi/abc12345678/mqdefault.jpg")
+    fireEvent.error(img()!)
+    expect(img()?.src).toBe("https://i.ytimg.com/vi/abc12345678/mqdefault.jpg")
 
-    fireEvent.error(img)
-    expect(img.src).toBe("https://i.ytimg.com/vi/abc12345678/default.jpg")
+    fireEvent.error(img()!)
+    expect(img()?.src).toBe("https://i.ytimg.com/vi/abc12345678/default.jpg")
 
-    // Already at the last fallback — another error must not change the src again.
-    fireEvent.error(img)
-    expect(img.src).toBe("https://i.ytimg.com/vi/abc12345678/default.jpg")
+    // Every source failed — a branded placeholder replaces the broken image.
+    fireEvent.error(img()!)
+    expect(img()).toBeNull()
+  })
+
+  it("uses a YouTube thumbnail when the song has no stored one", () => {
+    const { container } = render(<SongCard song={{ ...song, thumbnail: "" }} />)
+    expect(container.querySelector("img")?.getAttribute("src")).toBe(
+      "https://i.ytimg.com/vi/abc12345678/mqdefault.jpg",
+    )
   })
 
   it("shows a delete trigger only when onDelete is provided", () => {
