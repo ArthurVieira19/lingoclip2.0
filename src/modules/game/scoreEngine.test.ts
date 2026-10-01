@@ -55,6 +55,29 @@ describe("scoreAnswer", () => {
     expect(result.newCombo).toBe(0)
   })
 
+  it("awards half the points when the correct answer took a second attempt", () => {
+    const first = scoreAnswer({ isCorrect: true, responseTimeMs: 0, timeLimitMs: 5000, combo: 2, attempt: 1 })
+    const second = scoreAnswer({ isCorrect: true, responseTimeMs: 0, timeLimitMs: 5000, combo: 2, attempt: 2 })
+
+    expect(first.points).toBe(180)
+    expect(second.points).toBe(90)
+    expect(second.baseScore).toBe(50)
+    expect(second.speedBonus).toBe(25)
+    expect(second.comboBonus).toBe(15)
+  })
+
+  it("keeps the combo going on a second-attempt hit", () => {
+    const result = scoreAnswer({ isCorrect: true, responseTimeMs: 0, timeLimitMs: 5000, combo: 2, attempt: 2 })
+
+    expect(result.newCombo).toBe(3)
+  })
+
+  it("treats an omitted attempt as the first attempt", () => {
+    const input = { isCorrect: true, responseTimeMs: 1000, timeLimitMs: 5000, combo: 0 }
+
+    expect(scoreAnswer(input)).toEqual(scoreAnswer({ ...input, attempt: 1 }))
+  })
+
   it("is a pure function: same input always yields same output", () => {
     const input = { isCorrect: true, responseTimeMs: 1200, timeLimitMs: 4000, combo: 4 }
     expect(scoreAnswer(input)).toEqual(scoreAnswer(input))

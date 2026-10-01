@@ -95,6 +95,41 @@ describe("ExerciseLineView", () => {
     expect(onSubmit).toHaveBeenCalledWith(0, "dog")
   })
 
+  it("empties the input and flags the last try after a wrong guess", () => {
+    const line = makeLine([{ index: 0, raw: "world", isHidden: true, answer: "world" }])
+    const key = answeredTokenKey(0, 0)
+    const props = { line, exerciseIndex: 0, answeredTokens: {}, onSubmit: vi.fn() }
+
+    const { rerender } = render(<ExerciseLineView {...props} />)
+    fireEvent.change(screen.getByLabelText("Missing word, 5 letters"), { target: { value: "wxrld" } })
+    expect(screen.getByLabelText("Missing word, 5 letters")).toHaveValue("wxrld")
+
+    rerender(<ExerciseLineView {...props} wrongGuesses={{ [key]: ["wxrld"] }} />)
+
+    const input = screen.getByLabelText("Missing word, 5 letters — last try")
+    expect(input).toHaveValue("")
+  })
+
+  it("rules out a multiple-choice option that was already guessed wrong", () => {
+    const line = makeLine([
+      { index: 0, raw: "cat", isHidden: true, answer: "cat", choices: ["cat", "dog", "bird"] },
+    ])
+
+    render(
+      <ExerciseLineView
+        line={line}
+        exerciseIndex={0}
+        answeredTokens={{}}
+        wrongGuesses={{ [answeredTokenKey(0, 0)]: ["dog"] }}
+        onSubmit={vi.fn()}
+      />,
+    )
+
+    expect(screen.getByRole("button", { name: "dog" })).toBeDisabled()
+    expect(screen.getByRole("button", { name: "cat" })).toBeEnabled()
+    expect(screen.getByRole("button", { name: "bird" })).toBeEnabled()
+  })
+
   it("shows an answered token as correct or incorrect", () => {
     const line = makeLine([{ index: 0, raw: "cat", isHidden: true, answer: "cat" }])
     const key = answeredTokenKey(0, 0)

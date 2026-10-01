@@ -314,7 +314,7 @@ Files:
 
 difficultyEngine.ts
 
-Recreate LingoClip behavior.
+Implement the fill-in-the-missing-lyrics game behavior.
 
 Beginner
 

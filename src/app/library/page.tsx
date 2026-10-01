@@ -3,10 +3,12 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { ArrowRight, Music2, Play, Plus, Search, Sparkles, X } from "lucide-react";
+import { toast } from "sonner";
+import { ArrowRight, Loader2, Music2, Play, Plus, Search, Sparkles, X } from "lucide-react";
 import type { Song } from "@/types/Song";
 import type { Difficulty } from "@/types/Difficulty";
 import { SONGS, findSong } from "@/data/songs";
+import { useAuthStore } from "@/stores/authStore";
 import { useLibraryStore } from "@/stores/libraryStore";
 import { useStatsStore } from "@/stores/statsStore";
 import { hashStringToSeed } from "@/modules/game/seededRandom";
@@ -38,19 +40,27 @@ function difficultyRank(difficulty: string): number {
 }
 
 export default function LibraryPage() {
-  const customSongs = useLibraryStore((s) => s.customSongs);
+  const librarySongs = useLibraryStore((s) => s.songs);
+  const libraryStatus = useLibraryStore((s) => s.status);
   const removeSong = useLibraryStore((s) => s.removeSong);
+  const isAdmin = useAuthStore((s) => s.isAdmin);
   const history = useStatsStore((s) => s.statistics.history);
   const completedSongIds = useStatsStore((s) => s.progress.completedSongIds);
 
-  const customSongIds = useMemo(() => new Set(customSongs.map((song) => song.id)), [customSongs]);
-  const deleteIfCustom = (song: Song) => (customSongIds.has(song.id) ? removeSong : undefined);
+  // Only admins can remove songs from the global library (row level security enforces it too).
+  const handleRemove = (songId: string) => {
+    removeSong(songId).then(
+      () => toast.success("Song removed from the library."),
+      (error: unknown) => toast.error(error instanceof Error ? error.message : "Couldn't remove that song."),
+    );
+  };
+  const deleteIfAdmin = () => (isAdmin ? handleRemove : undefined);
 
   const [search, setSearch] = useState("");
   const [difficultyFilter, setDifficultyFilter] = useState<DifficultyFilter>("all");
   const [sortKey, setSortKey] = useState<SortKey>("title");
 
-  const allSongs = useMemo(() => [...SONGS, ...customSongs], [customSongs]);
+  const allSongs = useMemo(() => [...SONGS, ...librarySongs], [librarySongs]);
   const showCurated = allSongs.length >= CURATED_MIN_LIBRARY_SIZE;
 
   const dailyChallenge = useMemo(
@@ -65,11 +75,11 @@ export default function LibraryPage() {
       const songId = history[i].songId;
       if (seen.has(songId)) continue;
       seen.add(songId);
-      const song = findSong(songId, customSongs);
+      const song = findSong(songId, librarySongs);
       if (song) recent.push(song);
     }
     return recent;
-  }, [history, customSongs]);
+  }, [history, librarySongs]);
 
   const recommended = useMemo(
     () => allSongs.filter((song) => !completedSongIds.includes(song.id)).slice(0, 6),
@@ -94,7 +104,9 @@ export default function LibraryPage() {
   }, [allSongs, search, difficultyFilter, sortKey]);
 
   if (allSongs.length === 0) {
-    return <EmptyLibraryOnboarding />;
+    if (libraryStatus === "idle" || libraryStatus === "loading") return <LibrarySkeleton />;
+    if (libraryStatus === "error") return <LibraryLoadError />;
+    return <EmptyLibraryOnboarding isAdmin={isAdmin} />;
   }
 
   const isFiltering = search.trim().length > 0 || difficultyFilter !== "all";
@@ -108,28 +120,30 @@ export default function LibraryPage() {
             {allSongs.length} {allSongs.length === 1 ? "song" : "songs"} · pick one and fill in the gaps.
           </p>
         </div>
-        <Button
-          className="h-10 shrink-0 gap-1.5 rounded-full px-4"
-          render={<Link href="/library/add" />}
-          nativeButton={false}
-        >
-          <Plus aria-hidden className="size-4" />
-          <span className="hidden sm:inline">Add song</span>
-          <span className="sm:hidden">Add</span>
-        </Button>
+        {isAdmin && (
+          <Button
+            className="h-10 shrink-0 gap-1.5 rounded-full px-4"
+            render={<Link href="/library/add" />}
+            nativeButton={false}
+          >
+            <Plus aria-hidden className="size-4" />
+            <span className="hidden sm:inline">Add song</span>
+            <span className="sm:hidden">Add</span>
+          </Button>
+        )}
       </div>
 
       {dailyChallenge && !isFiltering && <DailyChallenge song={dailyChallenge} />}
 
       {showCurated && !isFiltering && recentlyPlayed.length > 0 && (
         <Section title="Continue playing">
-          <SongRow songs={recentlyPlayed} deleteFor={deleteIfCustom} />
+          <SongRow songs={recentlyPlayed} deleteFor={deleteIfAdmin} />
         </Section>
       )}
 
       {showCurated && !isFiltering && recommended.length > 0 && (
         <Section title="Not played yet">
-          <SongRow songs={recommended} deleteFor={deleteIfCustom} />
+          <SongRow songs={recommended} deleteFor={deleteIfAdmin} />
         </Section>
       )}
 
@@ -211,7 +225,7 @@ export default function LibraryPage() {
         {filteredSongs.length > 0 ? (
           <div className="grid grid-cols-2 gap-3 sm:gap-5 lg:grid-cols-3">
             {filteredSongs.map((song, index) => (
-              <SongCard key={song.id} song={song} index={index} onDelete={deleteIfCustom(song)} />
+              <SongCard key={song.id} song={song} index={index} onDelete={deleteIfAdmin()} />
             ))}
           </div>
         ) : (
@@ -302,13 +316,34 @@ function SongRow({
   );
 }
 
+function LibrarySkeleton() {
+  return (
+    <div role="status" aria-label="Loading library" className="flex justify-center px-4 py-24">
+      <Loader2 aria-hidden className="size-6 animate-spin text-muted-foreground" />
+    </div>
+  );
+}
+
+function LibraryLoadError() {
+  const load = useLibraryStore((s) => s.load);
+
+  return (
+    <div className="mx-auto flex max-w-md flex-col items-center px-4 py-24 text-center">
+      <h1 className="font-display text-xl font-semibold">Couldn&apos;t load the library</h1>
+      <p className="mt-2 text-muted-foreground text-pretty">Check your connection and try again.</p>
+      <Button className="mt-5" onClick={() => void load()}>
+        Try again
+      </Button>
+    </div>
+  );
+}
+
 /**
- * There's no bundled song catalog (see data/songs.ts — licensing means the
- * app ships empty by design), so a brand-new player's library is a blank
- * grid with nothing to explain it. This replaces that confusing first
- * impression with a direct explanation and the one action that unblocks it.
+ * The global library starts empty (licensing means no songs are bundled with
+ * the app, see data/songs.ts). Only admins can fill it, so players who can't
+ * add anything get an explanation instead of a dead-end button.
  */
-function EmptyLibraryOnboarding() {
+function EmptyLibraryOnboarding({ isAdmin }: { isAdmin: boolean }) {
   return (
     <div className="mx-auto flex max-w-md flex-col items-center px-4 py-20 text-center md:py-24">
       <motion.div
@@ -320,21 +355,31 @@ function EmptyLibraryOnboarding() {
         <Music2 aria-hidden className="size-7" />
       </motion.div>
 
-      <h1 className="mt-5 font-display text-2xl font-semibold">Your library is empty</h1>
-      <p className="mt-2 text-muted-foreground text-pretty">
-        SongGap doesn&apos;t ship with songs built in — pick any track on YouTube, paste the link, and
-        we&apos;ll try to find synced lyrics for it automatically. Takes about a minute.
-      </p>
+      <h1 className="mt-5 font-display text-2xl font-semibold">The library is empty</h1>
+      {isAdmin ? (
+        <>
+          <p className="mt-2 text-muted-foreground text-pretty">
+            SongGap doesn&apos;t ship with songs built in — pick any track on YouTube, paste the link, and
+            we&apos;ll try to find synced lyrics for it automatically. Songs you add are shared with every
+            player.
+          </p>
 
-      <Button
-        size="lg"
-        className="group mt-6 h-11 gap-2 rounded-full px-6"
-        render={<Link href="/library/add" />}
-        nativeButton={false}
-      >
-        Add your first song
-        <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />
-      </Button>
+          <Button
+            size="lg"
+            className="group mt-6 h-11 gap-2 rounded-full px-6"
+            render={<Link href="/library/add" />}
+            nativeButton={false}
+          >
+            Add the first song
+            <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />
+          </Button>
+        </>
+      ) : (
+        <p className="mt-2 text-muted-foreground text-pretty">
+          No songs have been added yet. Check back soon — new songs show up here as soon as an admin
+          adds them.
+        </p>
+      )}
     </div>
   );
 }

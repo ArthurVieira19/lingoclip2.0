@@ -11,7 +11,8 @@ import { GameSynchronizer } from "@/modules/game/GameSynchronizer"
 import { groupLyricLines } from "@/modules/lyrics/groupLyricLines"
 import { buildVocabularyPool, generateExerciseLine } from "@/modules/game/exerciseGenerator"
 import { normalize, validateAnswer } from "@/modules/game/answerValidator"
-import { scoreAnswer } from "@/modules/game/scoreEngine"
+import { analyzeMistake } from "@/modules/game/mistakeAnalyzer"
+import { MAX_ATTEMPTS, scoreAnswer } from "@/modules/game/scoreEngine"
 import { evaluateAchievements, toAchievement } from "@/modules/achievements/achievementEngine"
 import { usePlayerStore } from "@/stores/playerStore"
 import { answeredTokenKey, useGameStore } from "@/stores/gameStore"
@@ -25,25 +26,18 @@ const YOUTUBE_STATE_PLAYING = 1
 const CURRENT_TIME_UPDATE_INTERVAL_MS = 200
 
 /**
- * A hidden token the player hasn't nailed yet — never answered, or answered
- * wrong. A skipped line (see skipLine) is always treated as complete: its
- * blanks are deliberately marked wrong so their answers reveal, but that
- * must not re-trigger the pause-for-retry flow the instant playback moves
- * on to the next line.
+ * A hidden token the player hasn't resolved yet — still waiting on an answer.
+ * One that was answered wrong has used up its attempts and is already
+ * revealed, so it counts as resolved (a skipped line's blanks land here too).
  */
 function isIncompleteToken(
   line: ExerciseLine,
   lineIndex: number,
   answeredTokens: Record<string, boolean>,
-  skippedLines: Set<number>,
 ): boolean {
-  if (skippedLines.has(lineIndex)) return false
-
-  return line.tokens.some((token) => {
-    if (!token.isHidden) return false
-    const outcome = answeredTokens[answeredTokenKey(lineIndex, token.index)]
-    return outcome !== true
-  })
+  return line.tokens.some(
+    (token) => token.isHidden && !(answeredTokenKey(lineIndex, token.index) in answeredTokens),
+  )
 }
 
 /**
@@ -66,7 +60,6 @@ export function useGameController(
   const syncRef = useRef<GameSynchronizer | null>(null)
   const lineStartedAtRef = useRef<number>(Date.now())
   const sessionStartRef = useRef<number>(Date.now())
-  const skippedLinesRef = useRef<Set<number>>(new Set())
 
   const [isReady, setIsReady] = useState(false)
   const [isComplete, setIsComplete] = useState(false)
@@ -81,7 +74,6 @@ export function useGameController(
     setLastResult(null)
     sessionStartRef.current = Date.now()
     lineStartedAtRef.current = Date.now()
-    skippedLinesRef.current = new Set()
 
     // Fresh per playthrough so the hidden words vary each time the song is
     // played — stable for the rest of this session (retries/rewinds don't
@@ -133,18 +125,9 @@ export function useGameController(
         previousLine &&
         previousIndex >= 0 &&
         previousIndex !== index &&
-        isIncompleteToken(previousLine, previousIndex, state.answeredTokens, skippedLinesRef.current)
+        isIncompleteToken(previousLine, previousIndex, state.answeredTokens)
 
       if (missedPreviousLine && previousLine) {
-        previousLine.tokens.forEach((token) => {
-          if (
-            token.isHidden &&
-            state.answeredTokens[answeredTokenKey(previousIndex, token.index)] !== true
-          ) {
-            useGameStore.getState().unanswerToken(previousIndex, token.index)
-          }
-        })
-
         // Pause right here instead of letting playback bleed into the next
         // line — the player gets unlimited time to answer or replay this
         // line, rather than a fixed countdown racing against a rewind.
@@ -282,11 +265,34 @@ export function useGameController(
     if (alreadyRevealed) return null
 
     const { isCorrect } = validateAnswer(userInput, token.answer, { fuzzy: settings.fuzzyMatching })
+
+    // Each blank gets MAX_ATTEMPTS guesses. A wrong one that still leaves
+    // attempts to spare just marks the blank and lets the player try again —
+    // nothing is scored, revealed, or added to the combo until it's resolved.
+    const attempt = (state.wrongGuesses[answeredTokenKey(exerciseIndex, tokenIndex)]?.length ?? 0) + 1
+    // Why the guess was wrong, when it falls into a known listening pattern —
+    // shown as a hint on a retry, and as the full explanation once resolved.
+    const insight = isCorrect ? null : analyzeMistake(userInput, token.answer)
+    if (!isCorrect && attempt < MAX_ATTEMPTS) {
+      gameStore.recordWrongGuess(exerciseIndex, tokenIndex, userInput)
+      return {
+        isCorrect: false,
+        isFinal: false,
+        attemptsLeft: MAX_ATTEMPTS - attempt,
+        points: 0,
+        insight,
+        guess: userInput,
+        answer: token.answer,
+      }
+    }
+
     const responseTimeMs = Date.now() - lineStartedAtRef.current
     const timeLimitMs = Math.max(1000, (line.end - line.start) * 1000)
 
-    const result = scoreAnswer({ isCorrect, responseTimeMs, timeLimitMs, combo: state.combo })
-    recordWeakWordOutcome(line, token, isCorrect)
+    const result = scoreAnswer({ isCorrect, responseTimeMs, timeLimitMs, combo: state.combo, attempt })
+    // Needing a second try means the word wasn't caught by ear, so it still
+    // goes into the weak-word pool even though it was eventually right.
+    recordWeakWordOutcome(line, token, isCorrect && attempt === 1)
 
     gameStore.applyAnswer({
       exerciseIndex,
@@ -302,7 +308,7 @@ export function useGameController(
     // "continue" action — no need to also click the retry button.
     if (
       updated.pendingRetryLineIndex === exerciseIndex &&
-      !isIncompleteToken(line, exerciseIndex, updated.answeredTokens, skippedLinesRef.current)
+      !isIncompleteToken(line, exerciseIndex, updated.answeredTokens)
     ) {
       gameStore.setPendingRetry(null)
       // The synchronizer already silently advanced past this line the
@@ -319,7 +325,7 @@ export function useGameController(
       finishSong()
     }
 
-    return { isCorrect, ...result }
+    return { isCorrect, isFinal: true, attemptsLeft: 0, insight, guess: userInput, answer: token.answer, ...result }
   }
 
   /** Replays the paused line from its start after the player asks to hear it again. */
@@ -338,6 +344,28 @@ export function useGameController(
   }
 
   /**
+   * Replays the line that's currently on screen from its start, on demand and
+   * without disturbing answers already given — the "say that again" button.
+   * When playback is paused waiting on a retry it simply does that retry.
+   * Seeks to the line's exact start (never before it) so the synchronizer
+   * doesn't see the previous line and pause on the one being replayed.
+   */
+  function replayLine() {
+    const state = useGameStore.getState()
+    if (state.pendingRetryLineIndex !== null) {
+      retryLine()
+      return
+    }
+
+    const line = state.exercises[state.activeExerciseIndex]
+    if (!line) return
+
+    lineStartedAtRef.current = Date.now()
+    playerRef.current?.seek(Math.max(0, line.start))
+    play()
+  }
+
+  /**
    * Reveals every still-unanswered blank in the current line as a miss and
    * moves on — for when the player doesn't know the word and would rather
    * not guess or sit through a replay. Works whether the line is actively
@@ -348,12 +376,6 @@ export function useGameController(
     const lineIndex = state.pendingRetryLineIndex ?? state.activeExerciseIndex
     const line = state.exercises[lineIndex]
     if (!line) return
-
-    // Marked *before* revealing the answers below: those reveals record an
-    // incorrect outcome, which isIncompleteToken would otherwise still read
-    // as "missed" the instant playback moves past this line, re-triggering
-    // the pause-for-retry flow this skip was meant to bypass.
-    skippedLinesRef.current.add(lineIndex)
 
     line.tokens.forEach((token) => {
       if (!token.isHidden) return
@@ -405,11 +427,6 @@ export function useGameController(
       }
     })
 
-    // A manual jump back onto a previously skipped line is a genuine
-    // reattempt — let it be missed (and pause for retry) again if it isn't
-    // answered this time around.
-    skippedLinesRef.current.delete(lineIndex)
-
     gameStore.setPendingRetry(null)
     gameStore.setActiveExerciseIndex(lineIndex)
     lineStartedAtRef.current = Date.now()
@@ -426,6 +443,7 @@ export function useGameController(
     setPlaybackRate,
     submitAnswer,
     retryLine,
+    replayLine,
     skipLine,
     seekToLine,
     achievementsCount: achievements.achievements.length,

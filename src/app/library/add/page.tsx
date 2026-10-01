@@ -1,15 +1,16 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useMemo, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Loader2, Search } from "lucide-react";
-import type { Difficulty } from "@/types/Difficulty";
 import type { Song } from "@/types/Song";
 import { parseLRC } from "@/modules/lyrics/lrcParser";
+import { estimateSongDifficulty } from "@/modules/lyrics/estimateSongDifficulty";
 import { parseYoutubeId } from "@/modules/youtube/parseYoutubeId";
 import { searchSyncedLyrics, type LrclibResult } from "@/services/lyrics/lrclibClient";
 import { SONGS } from "@/data/songs";
+import { useAuthStore } from "@/stores/authStore";
 import { useLibraryStore } from "@/stores/libraryStore";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,8 +22,6 @@ function formatDuration(seconds: number): string {
   const secs = (totalSeconds % 60).toString().padStart(2, "0");
   return `${mins}:${secs}`;
 }
-
-const DIFFICULTIES: Difficulty[] = ["beginner", "intermediate", "advanced", "expert"];
 
 function slugify(text: string): string {
   const slug = text
@@ -37,13 +36,18 @@ function slugify(text: string): string {
 export default function AddSongPage() {
   const router = useRouter();
   const addSong = useLibraryStore((s) => s.addSong);
-  const customSongs = useLibraryStore((s) => s.customSongs);
+  const librarySongs = useLibraryStore((s) => s.songs);
+  const isAdmin = useAuthStore((s) => s.isAdmin);
+  const [saving, setSaving] = useState(false);
 
   const [title, setTitle] = useState("");
   const [artist, setArtist] = useState("");
   const [youtubeInput, setYoutubeInput] = useState("");
-  const [difficulty, setDifficulty] = useState<Difficulty>("beginner");
   const [lyricsInput, setLyricsInput] = useState("");
+  const estimatedDifficulty = useMemo(() => {
+    const parsed = parseLRC(lyricsInput);
+    return parsed.length > 0 ? estimateSongDifficulty(parsed).level : null;
+  }, [lyricsInput]);
   const [error, setError] = useState<string | null>(null);
 
   const [lyricsSearchLoading, setLyricsSearchLoading] = useState(false);
@@ -80,7 +84,7 @@ export default function AddSongPage() {
     setLyricsResults([]);
   }
 
-  function handleSubmit(event: FormEvent) {
+  async function handleSubmit(event: FormEvent) {
     event.preventDefault();
     setError(null);
 
@@ -90,9 +94,9 @@ export default function AddSongPage() {
       return;
     }
 
-    const isDuplicate = [...SONGS, ...customSongs].some((s) => s.youtubeId === youtubeId);
+    const isDuplicate = [...SONGS, ...librarySongs].some((s) => s.youtubeId === youtubeId);
     if (isDuplicate) {
-      setError("This song is already in your library.");
+      setError("This song is already in the library.");
       return;
     }
 
@@ -115,12 +119,31 @@ export default function AddSongPage() {
       artist: artist.trim(),
       youtubeId,
       thumbnail: `https://i.ytimg.com/vi/${youtubeId}/hqdefault.jpg`,
-      difficulty,
+      difficulty: estimateSongDifficulty(lyrics).level,
       lyrics,
     };
 
-    addSong(song);
+    setSaving(true);
+    try {
+      await addSong(song);
+    } catch (addError) {
+      setError(addError instanceof Error ? addError.message : "Couldn't save the song. Try again.");
+      setSaving(false);
+      return;
+    }
     router.push(`/game/${song.id}`);
+  }
+
+  // The form is hidden for everyone else, but the database is what actually refuses non-admin writes.
+  if (!isAdmin) {
+    return (
+      <div className="mx-auto max-w-md px-4 py-24 text-center">
+        <p className="text-muted-foreground">Only admins can add songs to the library.</p>
+        <Button className="mt-4" render={<Link href="/library" />} nativeButton={false}>
+          Back to library
+        </Button>
+      </div>
+    );
   }
 
   return (
@@ -139,8 +162,8 @@ export default function AddSongPage() {
             Paste a YouTube link, then try &ldquo;Find lyrics automatically&rdquo; to pull synced
             lyrics from lrclib.net, or paste your own in LRC format (
             <code className="rounded bg-accent px-1 py-0.5 text-xs">[00:12.50]line text</code>).
-            You provide the content, so make sure you have the rights to use it for your own
-            practice.
+            Songs you add join the global library and are visible to every player, so make sure you
+            have the rights to use the content.
           </p>
         </CardHeader>
         <CardContent>
@@ -177,27 +200,6 @@ export default function AddSongPage() {
                 required
               />
             </div>
-
-            <fieldset className="flex flex-col gap-1.5 border-0 p-0">
-              <legend className="text-sm font-medium">Difficulty</legend>
-              <div className="flex flex-wrap gap-2">
-                {DIFFICULTIES.map((level) => (
-                  <button
-                    key={level}
-                    type="button"
-                    aria-pressed={difficulty === level}
-                    onClick={() => setDifficulty(level)}
-                    className={
-                      difficulty === level
-                        ? "rounded-full bg-primary px-3 py-1 text-sm text-primary-foreground"
-                        : "rounded-full border border-border px-3 py-1 text-sm text-muted-foreground hover:bg-accent"
-                    }
-                  >
-                    {level}
-                  </button>
-                ))}
-              </div>
-            </fieldset>
 
             <div className="flex flex-col gap-1.5">
               <div className="flex items-center justify-between">
@@ -256,6 +258,17 @@ export default function AddSongPage() {
                 placeholder={"[00:01.00]First line\n[00:05.00]Second line"}
                 className="rounded-md border border-input bg-input/30 px-3 py-2 font-mono text-sm outline-none focus:border-primary"
               />
+              <p role="status" className="text-sm text-muted-foreground">
+                {estimatedDifficulty ? (
+                  <>
+                    Estimated difficulty:{" "}
+                    <span className="font-medium capitalize text-foreground">{estimatedDifficulty}</span>{" "}
+                    &mdash; worked out from how fast, varied and slangy the lyrics are.
+                  </>
+                ) : (
+                  "Difficulty is set automatically once valid lyrics are added."
+                )}
+              </p>
             </div>
 
             {error && (
@@ -264,7 +277,8 @@ export default function AddSongPage() {
               </p>
             )}
 
-            <Button type="submit" className="mt-2 self-start">
+            <Button type="submit" className="mt-2 gap-2 self-start" disabled={saving}>
+              {saving && <Loader2 aria-hidden className="size-4 animate-spin" />}
               Add song and play
             </Button>
           </form>

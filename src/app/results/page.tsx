@@ -12,7 +12,7 @@ import { useCountUp } from "@/hooks/useCountUp";
 
 export default function ResultsPage() {
   const lastResult = useGameStore((s) => s.lastResult);
-  const customSongs = useLibraryStore((s) => s.customSongs);
+  const librarySongs = useLibraryStore((s) => s.songs);
   const score = useCountUp(lastResult?.score ?? 0);
 
   if (!lastResult) {
@@ -26,7 +26,7 @@ export default function ResultsPage() {
     );
   }
 
-  const song = findSong(lastResult.songId, customSongs);
+  const song = findSong(lastResult.songId, librarySongs);
 
   return (
     <div className="relative mx-auto flex max-w-xl flex-col items-center overflow-hidden px-4 py-16 text-center">

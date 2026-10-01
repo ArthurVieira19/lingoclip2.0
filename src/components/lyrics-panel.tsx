@@ -12,6 +12,7 @@ interface LyricsPanelProps {
   exercises: ExerciseLine[]
   activeExerciseIndex: number
   answeredTokens: Record<string, boolean>
+  wrongGuesses?: Record<string, string[]>
   onSubmit: (tokenIndex: number, value: string) => void
   /** Seeks the video to a clicked line AND makes it the active, writable line. */
   onLineClick: (lineIndex: number) => void
@@ -28,6 +29,7 @@ export function LyricsPanel({
   exercises,
   activeExerciseIndex,
   answeredTokens,
+  wrongGuesses,
   onSubmit,
   onLineClick,
   fuzzy = true,
@@ -82,6 +84,7 @@ export function LyricsPanel({
                       line={line}
                       exerciseIndex={index}
                       answeredTokens={answeredTokens}
+                      wrongGuesses={wrongGuesses}
                       onSubmit={onSubmit}
                       fuzzy={fuzzy}
                       hideChoicePills

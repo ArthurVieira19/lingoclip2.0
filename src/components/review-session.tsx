@@ -5,9 +5,11 @@ import { motion, AnimatePresence } from "framer-motion"
 import { Check, X } from "lucide-react"
 import type { WeakWord } from "@/types/WeakWord"
 import { validateAnswer } from "@/modules/game/answerValidator"
+import { analyzeMistake, type MistakeInsight } from "@/modules/game/mistakeAnalyzer"
 import { buildReviewCard } from "@/modules/review/reviewCard"
 import { useReviewStore } from "@/stores/reviewStore"
 import { useSettingsStore } from "@/stores/settingsStore"
+import { useStatsStore } from "@/stores/statsStore"
 import { cn } from "@/lib/utils"
 
 const XP_PER_CORRECT = 15
@@ -21,7 +23,12 @@ export interface ReviewSummary {
   xpEarned: number
 }
 
-type Feedback = { status: "correct" | "incorrect"; correctAnswer: string } | null
+type Feedback = {
+  status: "correct" | "incorrect"
+  correctAnswer: string
+  /** Why the guess was wrong, when it matches a known listening pattern. */
+  insight: MistakeInsight | null
+} | null
 
 /**
  * Runs a spaced-repetition review session over a fixed snapshot of due
@@ -74,6 +81,11 @@ export function ReviewSession({
 
     const { isCorrect } = validateAnswer(value, card.word, { fuzzy: fuzzyMatching })
 
+    // The review store already keeps this answer, so the day counts toward the
+    // streak now — not only if the player makes it to the end of the deck.
+    // Idempotent per day, so calling it on every answer is harmless.
+    useStatsStore.getState().recordActivityDay()
+
     if (isCorrect) {
       statsRef.current.correctCount += 1
       statsRef.current.xpEarned += XP_PER_CORRECT
@@ -92,8 +104,12 @@ export function ReviewSession({
       })
     }
 
-    setFeedback({ status: isCorrect ? "correct" : "incorrect", correctAnswer: card.word })
-    advanceTimerRef.current = setTimeout(advance, ADVANCE_DELAY_MS)
+    const insight = isCorrect ? null : analyzeMistake(value, card.word)
+    setFeedback({ status: isCorrect ? "correct" : "incorrect", correctAnswer: card.word, insight })
+
+    // A wrong answer with an explanation waits for the player to read it and
+    // press Continue; everything else moves along by itself.
+    if (!insight) advanceTimerRef.current = setTimeout(advance, ADVANCE_DELAY_MS)
   }
 
   return (
@@ -169,25 +185,44 @@ export function ReviewSession({
 
             <AnimatePresence mode="wait">
               {feedback ? (
-                <motion.p
+                <motion.div
                   key="feedback"
+                  role="status"
                   initial={{ opacity: 0, y: -6 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className={cn(
-                    "flex items-center gap-1.5 text-sm font-medium",
-                    feedback.status === "correct" ? "text-secondary" : "text-destructive",
-                  )}
+                  className="flex flex-col items-center gap-3"
                 >
-                  {feedback.status === "correct" ? (
+                  <p
+                    className={cn(
+                      "flex items-center gap-1.5 text-sm font-medium",
+                      feedback.status === "correct" ? "text-secondary" : "text-destructive",
+                    )}
+                  >
+                    {feedback.status === "correct" ? (
+                      <>
+                        <Check aria-hidden className="size-4" /> Correct!
+                      </>
+                    ) : (
+                      <>
+                        <X aria-hidden className="size-4" /> It was &ldquo;{feedback.correctAnswer}&rdquo;
+                      </>
+                    )}
+                  </p>
+
+                  {feedback.insight && (
                     <>
-                      <Check aria-hidden className="size-4" /> Correct!
-                    </>
-                  ) : (
-                    <>
-                      <X aria-hidden className="size-4" /> It was &ldquo;{feedback.correctAnswer}&rdquo;
+                      <p className="max-w-sm text-sm text-muted-foreground">{feedback.insight.explanation}</p>
+                      <button
+                        type="button"
+                        autoFocus
+                        onClick={advance}
+                        className="min-h-11 rounded-full bg-primary px-7 text-base font-semibold text-primary-foreground transition-transform duration-150 hover:scale-[1.03] active:scale-95"
+                      >
+                        Continue
+                      </button>
                     </>
                   )}
-                </motion.p>
+                </motion.div>
               ) : (
                 <button
                   type="submit"

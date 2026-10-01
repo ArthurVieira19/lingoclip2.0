@@ -8,6 +8,9 @@ export interface HiddenWordSelection {
   forcedTyping: boolean
 }
 
+/** How many words at the start of a line are kept visible (except on expert). */
+export const LEADING_WORDS_TO_SKIP = 2
+
 function groupByPriorityTier(ranked: RankedWord[]): Map<number, RankedWord[]> {
   const tiers = new Map<number, RankedWord[]>()
 
@@ -48,10 +51,16 @@ export function selectWordsToHide(
     }
   }
 
-  const ratio = DIFFICULTY_HIDE_RATIO[difficulty]
-  const count = Math.min(ranked.length, Math.max(1, Math.round(ranked.length * ratio)))
+  // The opening words of a line arrive while the player is still catching up
+  // with the previous line, so they're the unfairest to ask for. Skip them
+  // unless that would leave the line with nothing to hide.
+  const afterLineStart = ranked.filter((r) => r.index >= LEADING_WORDS_TO_SKIP)
+  const candidates = afterLineStart.length > 0 ? afterLineStart : ranked
 
-  const tiers = groupByPriorityTier(ranked)
+  const ratio = DIFFICULTY_HIDE_RATIO[difficulty]
+  const count = Math.min(candidates.length, Math.max(1, Math.round(candidates.length * ratio)))
+
+  const tiers = groupByPriorityTier(candidates)
   const tierKeysDesc = [...tiers.keys()].sort((a, b) => b - a)
   const rng = createSeededRandom(hashStringToSeed(seed))
 

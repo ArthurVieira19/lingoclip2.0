@@ -8,17 +8,22 @@ import {
   ChartColumn,
   CircleQuestionMark,
   LibraryBig,
+  LogOut,
   Music2,
   Settings,
+  Trophy,
   type LucideIcon,
 } from "lucide-react";
 import { useReviewStore } from "@/stores/reviewStore";
+import { authService } from "@/services/auth/authService";
+import { isPublicPath } from "@/lib/authPaths";
 import { cn } from "@/lib/utils";
 
 const NAV_LINKS: { href: string; label: string; icon: LucideIcon }[] = [
   { href: "/library", label: "Library", icon: LibraryBig },
   { href: "/review", label: "Review", icon: BookOpenCheck },
   { href: "/statistics", label: "Stats", icon: ChartColumn },
+  { href: "/leaderboard", label: "Ranking", icon: Trophy },
   { href: "/how-to-play", label: "How to play", icon: CircleQuestionMark },
 ];
 
@@ -52,6 +57,10 @@ function DueBadge({ count, className }: { count: number; className?: string }) {
 export function SiteHeader() {
   const pathname = usePathname();
   const dueCount = useDueCount();
+  const isAuthPage = isPublicPath(pathname);
+
+  // The login/sign-up screens carry their own logo and have nowhere to navigate to.
+  if (isAuthPage) return null;
 
   return (
     <header className="glass sticky top-0 z-40 border-x-0 border-t-0">
@@ -110,6 +119,15 @@ export function SiteHeader() {
               className="size-[1.125rem] transition-transform duration-300 ease-[var(--ease-out-quint)] group-hover:rotate-45"
             />
           </Link>
+          <button
+            type="button"
+            aria-label="Log out"
+            title="Log out"
+            onClick={() => void authService.signOut()}
+            className="flex size-10 items-center justify-center rounded-full text-muted-foreground transition-colors duration-200 hover:bg-accent hover:text-foreground md:size-9"
+          >
+            <LogOut aria-hidden className="size-[1.125rem]" />
+          </button>
         </div>
       </div>
     </header>
@@ -125,14 +143,14 @@ export function MobileTabBar() {
   const pathname = usePathname();
   const dueCount = useDueCount();
 
-  if (pathname.startsWith("/game/")) return null;
+  if (pathname.startsWith("/game/") || isPublicPath(pathname)) return null;
 
   return (
     <nav
       aria-label="Primary"
       className="glass safe-bottom fixed inset-x-0 bottom-0 z-40 border-x-0 border-b-0 md:hidden"
     >
-      <ul className="mx-auto grid max-w-md grid-cols-4 px-2 pt-1.5">
+      <ul className="mx-auto grid max-w-md grid-cols-5 px-1 pt-1.5">
         {NAV_LINKS.map((link) => {
           const isActive = isActivePath(pathname, link.href);
           const Icon = link.icon;

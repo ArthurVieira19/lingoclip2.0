@@ -1,28 +1,44 @@
 import { create } from "zustand"
 import type { Song } from "@/types/Song"
-import { storageService } from "@/services/storage/storageService"
+import { songRepository } from "@/services/songs/songRepository"
+
+type LibraryStatus = "idle" | "loading" | "ready" | "error"
 
 interface LibraryState {
-  customSongs: Song[]
+  /** The global library, shared by every account. */
+  songs: Song[]
+  status: LibraryStatus
 }
 
 interface LibraryActions {
-  loadFromStorage: () => void
-  addSong: (song: Song) => void
-  removeSong: (songId: string) => void
+  load: () => Promise<void>
+  /** Admin only (enforced by row level security). Rejects with a readable message on failure. */
+  addSong: (song: Song) => Promise<void>
+  /** Admin only (enforced by row level security). Rejects with a readable message on failure. */
+  removeSong: (songId: string) => Promise<void>
 }
 
 export const useLibraryStore = create<LibraryState & LibraryActions>((set, get) => ({
-  customSongs: [],
-  loadFromStorage: () => set({ customSongs: storageService.getCustomSongs() }),
-  addSong: (song) => {
-    const customSongs = [...get().customSongs, song]
-    storageService.saveCustomSongs(customSongs)
-    set({ customSongs })
+  songs: [],
+  status: "idle",
+
+  load: async () => {
+    set({ status: "loading" })
+    try {
+      set({ songs: await songRepository.list(), status: "ready" })
+    } catch (error) {
+      console.warn("Could not load the song library.", error)
+      set({ status: "error" })
+    }
   },
-  removeSong: (songId) => {
-    const customSongs = get().customSongs.filter((song) => song.id !== songId)
-    storageService.saveCustomSongs(customSongs)
-    set({ customSongs })
+
+  addSong: async (song) => {
+    await songRepository.add(song)
+    set({ songs: [...get().songs, song] })
+  },
+
+  removeSong: async (songId) => {
+    await songRepository.remove(songId)
+    set({ songs: get().songs.filter((song) => song.id !== songId) })
   },
 }))

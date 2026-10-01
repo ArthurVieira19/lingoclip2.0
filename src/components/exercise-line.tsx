@@ -1,17 +1,22 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
-import { motion } from "framer-motion"
+import { motion, useAnimationControls } from "framer-motion"
 import type { ExerciseLine, ExerciseToken } from "@/types/ExerciseLine"
 import { isSingleInsertOrDeleteAway, normalize } from "@/modules/game/answerValidator"
+import { MAX_ATTEMPTS } from "@/modules/game/scoreEngine"
 import { answeredTokenKey } from "@/stores/gameStore"
 import { WordDefinitionPopover } from "@/components/word-definition-popover"
 import { cn } from "@/lib/utils"
+
+const NO_WRONG_GUESSES: Record<string, string[]> = {}
 
 interface ExerciseLineViewProps {
   line: ExerciseLine
   exerciseIndex: number
   answeredTokens: Record<string, boolean>
+  /** Wrong guesses already made on each still-open blank (see gameStore) — drives the "last try" state. */
+  wrongGuesses?: Record<string, string[]>
   onSubmit: (tokenIndex: number, value: string) => void
   /** Renders compact, high-contrast styling suited for overlaying on video. */
   caption?: boolean
@@ -25,6 +30,7 @@ export function ExerciseLineView({
   line,
   exerciseIndex,
   answeredTokens,
+  wrongGuesses = NO_WRONG_GUESSES,
   onSubmit,
   caption = false,
   fuzzy = true,
@@ -63,6 +69,7 @@ export function ExerciseLineView({
             token={token}
             isAnswered={key in answeredTokens}
             isCorrect={answeredTokens[key]}
+            wrongGuesses={wrongGuesses[key] ?? []}
             onSubmit={(value) => onSubmit(token.index, value)}
             caption={caption}
             fuzzy={fuzzy}
@@ -81,6 +88,7 @@ function ExerciseTokenView({
   token,
   isAnswered,
   isCorrect,
+  wrongGuesses,
   onSubmit,
   caption,
   fuzzy,
@@ -90,13 +98,23 @@ function ExerciseTokenView({
   token: ExerciseToken
   isAnswered: boolean
   isCorrect?: boolean
+  wrongGuesses: string[]
   onSubmit: (value: string) => void
   caption: boolean
   fuzzy: boolean
   hideChoicePills: boolean
   inputRef: (el: HTMLInputElement | null) => void
 }) {
-  const [value, setValue] = useState("")
+  const attemptsUsed = wrongGuesses.length
+  // The typed text is tagged with the attempt it belongs to, so a wrong guess
+  // empties the box for the next try without an effect to reset it.
+  const [typed, setTyped] = useState({ attempt: 0, text: "" })
+  const value = typed.attempt === attemptsUsed ? typed.text : ""
+  const shake = useAnimationControls()
+
+  useEffect(() => {
+    if (attemptsUsed > 0) void shake.start({ x: [0, -6, 6, -4, 4, 0], transition: { duration: 0.4 } })
+  }, [attemptsUsed, shake])
 
   if (!token.isHidden) {
     return (
@@ -156,8 +174,9 @@ function ExerciseTokenView({
             type="button"
             whileHover={{ y: -2 }}
             whileTap={{ scale: 0.96 }}
+            disabled={wrongGuesses.includes(choice)}
             onClick={() => onSubmit(choice)}
-            className="rounded-full border border-border bg-accent/60 px-4 py-1.5 font-body text-sm font-medium transition-colors hover:border-primary/50 hover:bg-primary/15 hover:text-primary"
+            className="rounded-full border border-border bg-accent/60 px-4 py-1.5 font-body text-sm font-medium transition-colors enabled:hover:border-primary/50 enabled:hover:bg-primary/15 enabled:hover:text-primary disabled:text-destructive/60 disabled:line-through disabled:opacity-50"
           >
             {choice}
           </motion.button>
@@ -167,21 +186,28 @@ function ExerciseTokenView({
   }
 
   const width = `${Math.max(token.answer?.length ?? 4, 3) + 2}ch`
+  const isLastTry = attemptsUsed > 0 && attemptsUsed >= MAX_ATTEMPTS - 1
+  const baseLabel = token.answer ? `Missing word, ${token.answer.length} letters` : "Missing word"
 
   return (
-    <input
+    <motion.input
       ref={inputRef}
+      animate={shake}
       style={{ width }}
-      className="inline-block rounded-md border-0 border-b-2 border-dashed border-primary/50 bg-transparent px-1 pb-0.5 text-center font-display font-semibold text-primary outline-none placeholder:text-primary/30 focus:border-primary focus:border-solid"
+      className={cn(
+        // scroll-mb: when a tap focuses the blank, the browser scrolls it clear of the fixed transport bar instead of leaving it underneath.
+        "inline-block scroll-mb-40 rounded-md border-0 border-b-2 border-dashed bg-transparent px-1 pb-0.5 text-center font-display font-semibold text-primary outline-none placeholder:text-primary/30 focus:border-solid",
+        isLastTry
+          ? "border-destructive/70 focus:border-destructive"
+          : "border-primary/50 focus:border-primary",
+      )}
       value={value}
-      aria-label={
-        token.answer ? `Missing word, ${token.answer.length} letters` : "Missing word"
-      }
+      aria-label={isLastTry ? `${baseLabel} — last try` : baseLabel}
       autoComplete="off"
       spellCheck={false}
       onChange={(event) => {
         const next = event.target.value
-        setValue(next)
+        setTyped({ attempt: attemptsUsed, text: next })
         if (!token.answer) return
 
         const normalizedNext = normalize(next)
@@ -222,11 +248,13 @@ export function ExerciseChoicesView({
   line,
   exerciseIndex,
   answeredTokens,
+  wrongGuesses = NO_WRONG_GUESSES,
   onSubmit,
 }: {
   line: ExerciseLine
   exerciseIndex: number
   answeredTokens: Record<string, boolean>
+  wrongGuesses?: Record<string, string[]>
   onSubmit: (tokenIndex: number, value: string) => void
 }) {
   const nextChoiceToken = line.tokens.find(
@@ -235,6 +263,8 @@ export function ExerciseChoicesView({
   )
 
   if (!nextChoiceToken) return null
+
+  const ruledOut = wrongGuesses[answeredTokenKey(exerciseIndex, nextChoiceToken.index)] ?? []
 
   return (
     <div
@@ -252,8 +282,9 @@ export function ExerciseChoicesView({
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1], delay: i * 0.03 }}
           whileTap={{ scale: 0.96 }}
+          disabled={ruledOut.includes(choice)}
           onClick={() => onSubmit(nextChoiceToken.index, choice)}
-          className="min-h-12 truncate rounded-xl border border-border bg-accent/60 px-4 font-body text-base font-medium transition-colors duration-150 hover:border-primary/50 hover:bg-primary/15 hover:text-primary"
+          className="min-h-12 truncate rounded-xl border border-border bg-accent/60 px-4 font-body text-base font-medium transition-colors duration-150 enabled:hover:border-primary/50 enabled:hover:bg-primary/15 enabled:hover:text-primary disabled:text-destructive/60 disabled:line-through disabled:opacity-50"
         >
           {choice}
         </motion.button>

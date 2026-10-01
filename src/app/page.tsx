@@ -28,8 +28,8 @@ export default function Home() {
         </h1>
 
         <p className="max-w-md text-base text-muted-foreground text-pretty sm:text-lg">
-          Pick a song, let it play, and fill in the missing words as they fly by. No accounts, no
-          fuss — your progress lives right here in your browser.
+          Pick a song, let it play, and fill in the missing words as they fly by. Your XP, streaks
+          and review words follow you on every device.
         </p>
 
         <SoundBars />

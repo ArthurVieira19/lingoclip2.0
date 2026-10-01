@@ -18,7 +18,6 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 export default function ReviewPage() {
   const weakWords = useReviewStore((s) => s.weakWords);
   const addXp = useStatsStore((s) => s.addXp);
-  const recordActivityDay = useStatsStore((s) => s.recordActivityDay);
 
   const [view, setView] = useState<ViewState>("idle");
   const [summary, setSummary] = useState<ReviewSummary | null>(null);
@@ -43,7 +42,7 @@ export default function ReviewPage() {
   }
 
   function handleFinish(result: ReviewSummary) {
-    recordActivityDay();
+    // The streak day itself is recorded per answer inside ReviewSession.
     if (result.xpEarned > 0) addXp(result.xpEarned);
     setSummary(result);
     setView("summary");

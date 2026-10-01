@@ -4,16 +4,9 @@ import type { Song } from "@/types/Song"
 import type { Statistics } from "@/types/Statistics"
 import type { UserProgress } from "@/types/UserProgress"
 import type { WeakWord } from "@/types/WeakWord"
+import { scheduleRemoteSync } from "@/services/supabase/userDataSync"
 import { readJSON, removeKey, writeJSON } from "./localStorageClient"
-
-const STORAGE_KEYS = {
-  settings: "songgap:v1:settings",
-  statistics: "songgap:v1:statistics",
-  progress: "songgap:v1:progress",
-  achievements: "songgap:v1:achievements",
-  customSongs: "songgap:v1:customSongs",
-  weakWords: "songgap:v1:weakWords",
-} as const
+import { LEGACY_CUSTOM_SONGS_KEY, STORAGE_KEYS } from "./storageKeys"
 
 export const DEFAULT_SETTINGS: Settings = {
   volume: 0.8,
@@ -48,12 +41,19 @@ export const DEFAULT_PROGRESS: UserProgress = {
   wordsMastered: 0,
 }
 
+/**
+ * Synchronous, LocalStorage-backed cache of the signed-in player's data. The
+ * database is the source of truth: every save also queues a debounced upsert
+ * to Supabase (a no-op until someone is signed in), and userDataSync refills
+ * this cache from the database on login.
+ */
 export const storageService = {
   getSettings(): Settings {
     return readJSON(STORAGE_KEYS.settings, DEFAULT_SETTINGS)
   },
   saveSettings(settings: Settings): void {
     writeJSON(STORAGE_KEYS.settings, settings)
+    scheduleRemoteSync()
   },
 
   getStatistics(): Statistics {
@@ -61,6 +61,7 @@ export const storageService = {
   },
   saveStatistics(statistics: Statistics): void {
     writeJSON(STORAGE_KEYS.statistics, statistics)
+    scheduleRemoteSync()
   },
 
   getProgress(): UserProgress {
@@ -71,6 +72,7 @@ export const storageService = {
   },
   saveProgress(progress: UserProgress): void {
     writeJSON(STORAGE_KEYS.progress, progress)
+    scheduleRemoteSync()
   },
 
   getAchievements(): Achievement[] {
@@ -78,13 +80,7 @@ export const storageService = {
   },
   saveAchievements(achievements: Achievement[]): void {
     writeJSON(STORAGE_KEYS.achievements, achievements)
-  },
-
-  getCustomSongs(): Song[] {
-    return readJSON<Song[]>(STORAGE_KEYS.customSongs, [])
-  },
-  saveCustomSongs(songs: Song[]): void {
-    writeJSON(STORAGE_KEYS.customSongs, songs)
+    scheduleRemoteSync()
   },
 
   getWeakWords(): WeakWord[] {
@@ -92,8 +88,18 @@ export const storageService = {
   },
   saveWeakWords(weakWords: WeakWord[]): void {
     writeJSON(STORAGE_KEYS.weakWords, weakWords)
+    scheduleRemoteSync()
   },
 
+  /** Songs added in the browser before accounts existed — read once, to migrate them to the global library. */
+  getLegacyCustomSongs(): Song[] {
+    return readJSON<Song[]>(LEGACY_CUSTOM_SONGS_KEY, [])
+  },
+  clearLegacyCustomSongs(): void {
+    removeKey(LEGACY_CUSTOM_SONGS_KEY)
+  },
+
+  /** Wipes the local cache only. Use `resetProgress` (userDataSync) to also erase the database copy. */
   clearAll(): void {
     Object.values(STORAGE_KEYS).forEach(removeKey)
   },

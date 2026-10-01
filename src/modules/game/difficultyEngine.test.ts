@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { selectWordsToHide } from "./difficultyEngine"
+import { LEADING_WORDS_TO_SKIP, selectWordsToHide } from "./difficultyEngine"
 
 const WORDS = ["The", "brave", "fox", "jumped", "quickly", "over", "the", "lazy", "dog"]
 
@@ -52,6 +52,34 @@ describe("selectWordsToHide", () => {
     for (const index of result.indices) {
       expect(["the", "and", "haha", "yeah"]).not.toContain(words[index])
     }
+  })
+
+  it("keeps the first words of a line visible below expert", () => {
+    const words = ["Running", "fast", "through", "the", "city", "streets"]
+
+    for (const difficulty of ["beginner", "intermediate", "advanced"] as const) {
+      for (const seed of ["a", "b", "c", "d"]) {
+        const { indices } = selectWordsToHide(words, difficulty, seed)
+
+        expect(indices.length).toBeGreaterThan(0)
+        for (const index of indices) {
+          expect(index).toBeGreaterThanOrEqual(LEADING_WORDS_TO_SKIP)
+        }
+      }
+    }
+  })
+
+  it("still hides the leading words on expert", () => {
+    const { indices } = selectWordsToHide(["Running", "fast", "through", "city"], "expert", "a")
+
+    expect(indices).toContain(0)
+  })
+
+  it("falls back to the leading words when nothing else in the line is eligible", () => {
+    const { indices } = selectWordsToHide(["Running", "fast", "the", "and"], "beginner", "a")
+
+    expect(indices).toHaveLength(1)
+    expect([0, 1]).toContain(indices[0])
   })
 
   it("returns no indices when there are no eligible words", () => {

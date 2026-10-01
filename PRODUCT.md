@@ -10,7 +10,7 @@ English learners who practice listening comprehension by filling in the blanks o
 
 ## Product Purpose
 
-SongGap is an original take on the LingoClip/LyricsTraining game mechanic: pick a song, watch the music video, type or select the words hidden in the synced lyrics before the line passes. Success looks like a player staying immersed in the video and the music while still being able to type comfortably, understanding at a glance what to do next, and coming back for more songs/streaks without ever hitting a login wall or a confusing screen.
+SongGap is an original take on the fill-in-the-missing-lyrics game mechanic: pick a song, watch the music video, type or select the words hidden in the synced lyrics before the line passes. Success looks like a player staying immersed in the video and the music while still being able to type comfortably, understanding at a glance what to do next, and coming back for more songs/streaks without ever hitting a login wall or a confusing screen.
 
 ## Brand Personality
 

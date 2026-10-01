@@ -1,14 +1,17 @@
 "use client";
 
-import { useState } from "react";
-import { Laptop, Moon, Sun, Trash2, Volume2, VolumeX } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Laptop, LogOut, Moon, ShieldCheck, Sun, Trash2, Volume2, VolumeX } from "lucide-react";
 import type { Settings } from "@/types/Settings";
+import { useAuthStore } from "@/stores/authStore";
 import { useSettingsStore } from "@/stores/settingsStore";
 import { useStatsStore } from "@/stores/statsStore";
 import { useAchievementStore } from "@/stores/achievementStore";
 import { useReviewStore } from "@/stores/reviewStore";
-import { useLibraryStore } from "@/stores/libraryStore";
-import { storageService } from "@/services/storage/storageService";
+import { authService } from "@/services/auth/authService";
+import { leaderboardService } from "@/services/leaderboard/leaderboardService";
+import { resetProgress } from "@/services/supabase/userDataSync";
+import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
@@ -34,24 +37,82 @@ const THEME_OPTIONS: { value: Settings["theme"]; label: string; icon: typeof Sun
 export default function SettingsPage() {
   const settings = useSettingsStore((s) => s.settings);
   const updateSettings = useSettingsStore((s) => s.updateSettings);
-  const [resetDone, setResetDone] = useState(false);
+  const displayName = useAuthStore((s) => s.displayName);
+  const email = useAuthStore((s) => s.email);
+  const isAdmin = useAuthStore((s) => s.isAdmin);
+  const userId = useAuthStore((s) => s.userId);
+  const [resetStatus, setResetStatus] = useState<"idle" | "done" | "failed">("idle");
+  const [signingOut, setSigningOut] = useState(false);
+  // null = not known yet (still loading, offline, or the leaderboard setup hasn't been run).
+  const [leaderboardHidden, setLeaderboardHidden] = useState<boolean | null>(null);
+  const [privacyFailed, setPrivacyFailed] = useState(false);
 
-  function handleResetProgress() {
-    storageService.clearAll();
+  useEffect(() => {
+    if (!userId) return;
+    let cancelled = false;
+    void leaderboardService.getHidden(userId).then((value) => {
+      if (!cancelled) setLeaderboardHidden(value);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
+
+  async function handleLeaderboardVisibility(visible: boolean) {
+    const previous = leaderboardHidden;
+    setPrivacyFailed(false);
+    setLeaderboardHidden(!visible);
+    const saved = await leaderboardService.setHidden(!visible);
+    if (!saved) {
+      setLeaderboardHidden(previous);
+      setPrivacyFailed(true);
+    }
+  }
+
+  async function handleResetProgress() {
+    const saved = await resetProgress();
     useStatsStore.getState().loadFromStorage();
     useAchievementStore.getState().loadFromStorage();
     useReviewStore.getState().loadFromStorage();
-    useLibraryStore.getState().loadFromStorage();
     useSettingsStore.getState().loadFromStorage();
-    setResetDone(true);
+    setResetStatus(saved ? "done" : "failed");
+  }
+
+  function handleSignOut() {
+    setSigningOut(true);
+    void authService.signOut();
   }
 
   return (
     <div className="mx-auto max-w-xl space-y-6 px-4 py-12">
       <div>
         <h1 className="font-display text-3xl font-semibold tracking-tight">Settings</h1>
-        <p className="mt-1 text-muted-foreground">Everything here saves straight to your browser.</p>
+        <p className="mt-1 text-muted-foreground">Everything here is saved to your account.</p>
       </div>
+
+      <Card className="glass border-0">
+        <CardHeader>
+          <CardTitle className="font-display">Account</CardTitle>
+        </CardHeader>
+        <CardContent className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="flex items-center gap-2 text-sm font-medium">
+              <span className="truncate">{displayName}</span>
+              {isAdmin && (
+                <Badge variant="secondary" className="gap-1">
+                  <ShieldCheck aria-hidden className="size-3" />
+                  Admin
+                </Badge>
+              )}
+            </p>
+            <p className="truncate text-xs text-muted-foreground">{email}</p>
+          </div>
+          <Button variant="outline" className="shrink-0 gap-1.5" disabled={signingOut} onClick={handleSignOut}>
+            <LogOut aria-hidden className="size-4" />
+            Log out
+          </Button>
+        </CardContent>
+      </Card>
 
       <Card className="glass border-0">
         <CardHeader>
@@ -130,6 +191,40 @@ export default function SettingsPage() {
 
       <Card className="glass border-0">
         <CardHeader>
+          <CardTitle className="font-display">Privacy</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <label htmlFor="show-on-leaderboard" className="text-sm font-medium">
+                Show me on the leaderboard
+              </label>
+              <p className="text-xs text-muted-foreground">
+                Other players see your display name ({displayName}), level and XP — never your email.
+              </p>
+            </div>
+            <Switch
+              id="show-on-leaderboard"
+              checked={leaderboardHidden === false}
+              disabled={leaderboardHidden === null}
+              onCheckedChange={(checked) => void handleLeaderboardVisibility(checked)}
+            />
+          </div>
+          {leaderboardHidden === null && (
+            <p className="mt-3 text-xs text-muted-foreground">
+              Not available right now — the leaderboard may not be set up yet, or you&apos;re offline.
+            </p>
+          )}
+          {privacyFailed && (
+            <p role="alert" className="mt-3 text-sm text-destructive">
+              Couldn&apos;t save that. Check your connection and try again.
+            </p>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card className="glass border-0">
+        <CardHeader>
           <CardTitle className="font-display text-destructive">Danger zone</CardTitle>
         </CardHeader>
         <CardContent>
@@ -137,8 +232,8 @@ export default function SettingsPage() {
             <div>
               <p className="text-sm font-medium">Reset all progress</p>
               <p className="text-xs text-muted-foreground">
-                Erases XP, streaks, statistics, achievements, review words, and your added songs. Cannot
-                be undone.
+                Erases your XP, streaks, statistics, achievements and review words. The song library is
+                shared and isn&apos;t affected. Cannot be undone.
               </p>
             </div>
             <Dialog>
@@ -154,9 +249,8 @@ export default function SettingsPage() {
                 <DialogHeader>
                   <DialogTitle>Reset all progress?</DialogTitle>
                   <DialogDescription>
-                    This permanently deletes everything saved in this browser — XP, streaks,
-                    statistics, achievements, review words, and any songs you&apos;ve added. There is
-                    no undo.
+                    This permanently deletes everything saved to your account — XP, streaks,
+                    statistics, achievements and review words. There is no undo.
                   </DialogDescription>
                 </DialogHeader>
                 <DialogFooter>
@@ -172,9 +266,15 @@ export default function SettingsPage() {
               </DialogContent>
             </Dialog>
           </div>
-          {resetDone && (
+          {resetStatus === "done" && (
             <p role="status" className="mt-3 text-sm text-secondary">
               Done — everything&apos;s been reset.
+            </p>
+          )}
+          {resetStatus === "failed" && (
+            <p role="alert" className="mt-3 text-sm text-destructive">
+              Reset on this device, but we couldn&apos;t reach the server — your saved account data is
+              unchanged. Try again when you&apos;re back online.
             </p>
           )}
         </CardContent>

@@ -1,19 +1,22 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
-import { Flame, Pause, Play, RotateCcw, SkipForward, Star } from "lucide-react";
+import { Flame, Pause, Play, Repeat, RotateCcw, SkipForward, Star } from "lucide-react";
 import type { Song } from "@/types/Song";
 import type { Difficulty } from "@/types/Difficulty";
 import type { GameMode } from "@/types/GameMode";
 import { useGameController } from "@/hooks/useGameController";
+import { useGameShortcuts } from "@/hooks/useGameShortcuts";
+import { GAME_SHORTCUT_LEGEND } from "@/modules/game/gameShortcuts";
 import { useGameStore } from "@/stores/gameStore";
 import { usePlayerStore } from "@/stores/playerStore";
 import { useSettingsStore } from "@/stores/settingsStore";
 import { LyricsPanel } from "@/components/lyrics-panel";
 import { ExerciseChoicesView } from "@/components/exercise-line";
 import { PlaybackRateControl } from "@/components/playback-rate-control";
+import { MistakeNote, type MistakeNoteData } from "@/components/mistake-note";
 import { cn } from "@/lib/utils";
 
 const EASE_OUT = [0.22, 1, 0.36, 1] as const;
@@ -38,6 +41,7 @@ export function GameScreen({
   const exercises = useGameStore((s) => s.exercises);
   const activeExerciseIndex = useGameStore((s) => s.activeExerciseIndex);
   const answeredTokens = useGameStore((s) => s.answeredTokens);
+  const wrongGuesses = useGameStore((s) => s.wrongGuesses);
   const score = useGameStore((s) => s.score);
   const combo = useGameStore((s) => s.combo);
   const totalAnswers = useGameStore((s) => s.totalAnswers);
@@ -48,6 +52,10 @@ export function GameScreen({
   const fuzzyMatching = useSettingsStore((s) => s.settings.fuzzyMatching);
 
   const [flash, setFlash] = useState<ScoreFlash | null>(null);
+  const [note, setNote] = useState<MistakeNoteData | null>(null);
+  // Mirrors each answer's outcome as plain text for screen readers — the visual flash above is aria-hidden.
+  const [announcement, setAnnouncement] = useState("");
+  const dismissNote = useCallback(() => setNote(null), []);
 
   const activeLine = exercises[activeExerciseIndex];
   const isPausedForRetry = pendingRetryLineIndex !== null;
@@ -75,11 +83,31 @@ export function GameScreen({
     if (!result) return;
     // Feedback lands right next to the score instead of in a toast: a toast
     // per answer piles up and pulls the eye away from the lyrics.
+    const id = Date.now();
     setFlash({
-      id: Date.now(),
-      label: result.isCorrect ? `+${result.points}` : "miss",
+      id,
+      label: result.isCorrect ? `+${result.points}` : result.isFinal ? "miss" : "try again",
       tone: result.isCorrect ? "hit" : "miss",
     });
+
+    if (result.isCorrect) {
+      setNote(null);
+      setAnnouncement(`Correct, plus ${result.points} points.`);
+    } else if (result.insight) {
+      // Mid-try, only hint at the kind of slip — the word itself stays hidden.
+      setNote({
+        id,
+        tone: result.isFinal ? "explain" : "nudge",
+        guess: result.guess,
+        answer: result.answer,
+        text: result.isFinal ? result.insight.explanation : result.insight.nudge,
+      });
+      setAnnouncement(
+        result.isFinal ? `Incorrect. ${result.insight.explanation}` : `Not quite. ${result.insight.nudge}`,
+      );
+    } else {
+      setAnnouncement(result.isFinal ? `Incorrect. The word was ${result.answer}.` : "Not quite. Try again.");
+    }
   }
 
   function togglePlayback() {
@@ -87,9 +115,26 @@ export function GameScreen({
     else controller.play();
   }
 
+  function rewind(seconds: number) {
+    controller.seek(Math.max(0, currentTime - seconds));
+  }
+
+  useGameShortcuts(
+    {
+      togglePlayback,
+      replayLine: controller.replayLine,
+      skipLine: controller.skipLine,
+      rewind5: () => rewind(5),
+    },
+    controller.isReady && !controller.isComplete,
+  );
+
   return (
     // Extra bottom clearance on phones: the fixed transport bar is taller than the tab bar that main's padding accounts for.
     <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 pt-4 pb-10 lg:gap-5 lg:py-8">
+      <p role="status" aria-live="polite" className="sr-only">
+        {announcement}
+      </p>
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
           <h1 className="truncate font-display text-lg font-semibold lg:text-xl">{song.title}</h1>
@@ -161,12 +206,17 @@ export function GameScreen({
             )}
           </AnimatePresence>
 
+          <AnimatePresence initial={false}>
+            {note && <MistakeNote key={note.id} note={note} onDismiss={dismissNote} />}
+          </AnimatePresence>
+
           {mode === "multipleChoice" && activeLine && hasPendingChoice && (
             <div className="glass rounded-2xl p-3 sm:p-4">
               <ExerciseChoicesView
                 line={activeLine}
                 exerciseIndex={activeExerciseIndex}
                 answeredTokens={answeredTokens}
+                wrongGuesses={wrongGuesses}
                 onSubmit={handleSubmit}
               />
             </div>
@@ -178,6 +228,7 @@ export function GameScreen({
             exercises={exercises}
             activeExerciseIndex={activeExerciseIndex}
             answeredTokens={answeredTokens}
+            wrongGuesses={wrongGuesses}
             onSubmit={handleSubmit}
             onLineClick={controller.seekToLine}
             fuzzy={fuzzyMatching}
@@ -187,6 +238,7 @@ export function GameScreen({
               Tap any word for its definition · tap a line to jump there
             </p>
           )}
+          <ShortcutLegend />
         </div>
       </div>
 
@@ -218,16 +270,26 @@ export function GameScreen({
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-1.5">
               <TransportButton
-                label="Rewind 10 seconds"
-                onClick={() => controller.seek(Math.max(0, currentTime - 10))}
+                label="Replay this line (Alt+R)"
+                onClick={controller.replayLine}
                 disabled={!controller.isReady}
+              >
+                <Repeat aria-hidden className="size-4" />
+                <span className="hidden text-sm sm:inline">Replay</span>
+              </TransportButton>
+              {/* The 10s jump is dropped on narrow phones: replay-line and 5s cover it, and the row has to fit 4 controls. */}
+              <TransportButton
+                label="Rewind 10 seconds"
+                onClick={() => rewind(10)}
+                disabled={!controller.isReady}
+                className="hidden sm:flex"
               >
                 <RotateCcw aria-hidden className="size-4" />
                 <span className="text-xs tabular-nums">10</span>
               </TransportButton>
               <TransportButton
-                label="Rewind 5 seconds"
-                onClick={() => controller.seek(Math.max(0, currentTime - 5))}
+                label="Rewind 5 seconds (Alt+B)"
+                onClick={() => rewind(5)}
                 disabled={!controller.isReady}
               >
                 <RotateCcw aria-hidden className="size-4" />
@@ -270,7 +332,7 @@ export function GameScreen({
                 onChange={controller.setPlaybackRate}
                 disabled={!controller.isReady}
               />
-              <TransportButton label="Skip line" onClick={controller.skipLine} disabled={!controller.isReady}>
+              <TransportButton label="Skip line (Alt+S)" onClick={controller.skipLine} disabled={!controller.isReady}>
                 <SkipForward aria-hidden className="size-4" />
                 <span className="hidden text-sm sm:inline">Skip</span>
               </TransportButton>
@@ -286,11 +348,13 @@ function TransportButton({
   label,
   onClick,
   disabled,
+  className,
   children,
 }: {
   label: string;
   onClick: () => void;
   disabled?: boolean;
+  className?: string;
   children: React.ReactNode;
 }) {
   return (
@@ -300,10 +364,29 @@ function TransportButton({
       disabled={disabled}
       aria-label={label}
       title={label}
-      className="flex h-10 min-w-10 items-center justify-center gap-1 rounded-full border border-border bg-accent/60 px-3 font-medium text-muted-foreground transition-[transform,color,background-color] duration-150 disabled:opacity-40 enabled:hover:bg-accent enabled:hover:text-foreground enabled:active:scale-95"
+      className={cn(
+        "flex h-10 min-w-10 items-center justify-center gap-1 rounded-full border border-border bg-accent/60 px-3 font-medium text-muted-foreground transition-[transform,color,background-color] duration-150 disabled:opacity-40 enabled:hover:bg-accent enabled:hover:text-foreground enabled:active:scale-95",
+        className,
+      )}
     >
       {children}
     </button>
+  );
+}
+
+/** Keyboard shortcut cheat-sheet — desktop only, since phones have no hardware keys to press. */
+function ShortcutLegend() {
+  return (
+    <p className="hidden flex-wrap items-center gap-x-3 gap-y-1 px-2 text-xs text-muted-foreground lg:flex">
+      {GAME_SHORTCUT_LEGEND.map(({ keys, label }) => (
+        <span key={keys} className="flex items-center gap-1.5">
+          <kbd className="rounded border border-border bg-accent/60 px-1.5 py-0.5 font-body text-[0.7rem] font-medium text-foreground/80">
+            {keys}
+          </kbd>
+          {label}
+        </span>
+      ))}
+    </p>
   );
 }
 

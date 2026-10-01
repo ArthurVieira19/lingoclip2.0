@@ -12,11 +12,11 @@ import { GameScreen } from "@/components/game-screen";
 import { GameModeSelector } from "@/components/game-mode-selector";
 import { DifficultySelector } from "@/components/difficulty-selector";
 
-/** Resolves a song from the built-in catalog or the user's LocalStorage-backed library. */
+/** Resolves a song from the built-in catalog or the global library. */
 export function GameScreenLoader({ songId }: { songId: string }) {
-  const customSongs = useLibraryStore((s) => s.customSongs);
+  const librarySongs = useLibraryStore((s) => s.songs);
   const updateSettings = useSettingsStore((s) => s.updateSettings);
-  const song = findSong(songId, customSongs);
+  const song = findSong(songId, librarySongs);
 
   const [mode, setMode] = useState<GameMode | null>(null);
   const [difficulty, setDifficulty] = useState<Difficulty | null>(null);

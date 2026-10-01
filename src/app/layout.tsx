@@ -2,7 +2,8 @@ import type { Metadata, Viewport } from "next";
 import { Bricolage_Grotesque, Instrument_Sans } from "next/font/google";
 import { ThemeProvider } from "next-themes";
 import { MotionConfig } from "framer-motion";
-import { AppInit } from "@/components/app-init";
+import { AuthGate } from "@/components/auth-gate";
+import { AuthProvider } from "@/components/auth-provider";
 import { MobileTabBar, SiteHeader } from "@/components/site-header";
 import { PageTransitions } from "@/components/page-transitions";
 import { ThemeSync } from "@/components/theme-sync";
@@ -58,12 +59,14 @@ export default function RootLayout({
               prefers-reduced-motion block in globals.css. */}
           <MotionConfig reducedMotion="user">
             <div aria-hidden className="grain-overlay" />
-            <AppInit />
+            <AuthProvider />
             <ThemeSync />
             <OfflineBanner />
             <SiteHeader />
             <main id="main-content" className="pb-safe-bar relative flex-1 md:pb-0">
-              <PageTransitions>{children}</PageTransitions>
+              <PageTransitions>
+                <AuthGate>{children}</AuthGate>
+              </PageTransitions>
             </main>
             <MobileTabBar />
             <Toaster position="top-center" />

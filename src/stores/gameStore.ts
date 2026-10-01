@@ -28,6 +28,12 @@ interface GameState {
   totalAnswers: number
   /** `${exerciseIndex}:${tokenIndex}` -> whether that answer was correct. */
   answeredTokens: Record<string, boolean>
+  /**
+   * `${exerciseIndex}:${tokenIndex}` -> the wrong guesses made so far on a
+   * blank that is still open. Cleared once the blank is resolved (correct, or
+   * out of attempts), so its length is the number of attempts already used.
+   */
+  wrongGuesses: Record<string, string[]>
   /** Result of the most recently finished song, read by the Results page. */
   lastResult: GameResult | null
   /**
@@ -45,10 +51,11 @@ interface GameActions {
   setActiveExerciseIndex: (index: number) => void
   /** Records the outcome of an already-scored answer. Scoring itself lives in scoreEngine. */
   applyAnswer: (input: ApplyAnswerInput) => void
+  /** Records a wrong guess that still leaves attempts to spare — the blank stays open and nothing is scored. */
+  recordWrongGuess: (exerciseIndex: number, tokenIndex: number, guess: string) => void
   /**
-   * Reverses a token back to unanswered — used when a line's time runs out
-   * before it was answered correctly, so the player gets a genuine retry
-   * instead of a permanently revealed/wrong blank.
+   * Reverses a token back to unanswered, with a fresh set of attempts — used
+   * when the player deliberately jumps back onto a line to try it again.
    */
   unanswerToken: (exerciseIndex: number, tokenIndex: number) => void
   setLastResult: (result: GameResult) => void
@@ -67,6 +74,7 @@ const initialState: GameState = {
   correctAnswers: 0,
   totalAnswers: 0,
   answeredTokens: {},
+  wrongGuesses: {},
   lastResult: null,
   pendingRetryLineIndex: null,
 }
@@ -78,27 +86,40 @@ export const useGameStore = create<GameState & GameActions>((set) => ({
   setMode: (mode) => set({ mode }),
   setActiveExerciseIndex: (activeExerciseIndex) => set({ activeExerciseIndex }),
   applyAnswer: ({ exerciseIndex, tokenIndex, points, isCorrect, newCombo }) =>
-    set((state) => ({
-      score: state.score + points,
-      combo: newCombo,
-      maxCombo: Math.max(state.maxCombo, newCombo),
-      correctAnswers: state.correctAnswers + (isCorrect ? 1 : 0),
-      totalAnswers: state.totalAnswers + 1,
-      answeredTokens: {
-        ...state.answeredTokens,
-        [answeredTokenKey(exerciseIndex, tokenIndex)]: isCorrect,
-      },
-    })),
+    set((state) => {
+      const key = answeredTokenKey(exerciseIndex, tokenIndex)
+      const wrongGuesses = { ...state.wrongGuesses }
+      delete wrongGuesses[key]
+
+      return {
+        score: state.score + points,
+        combo: newCombo,
+        maxCombo: Math.max(state.maxCombo, newCombo),
+        correctAnswers: state.correctAnswers + (isCorrect ? 1 : 0),
+        totalAnswers: state.totalAnswers + 1,
+        answeredTokens: { ...state.answeredTokens, [key]: isCorrect },
+        wrongGuesses,
+      }
+    }),
+  recordWrongGuess: (exerciseIndex, tokenIndex, guess) =>
+    set((state) => {
+      const key = answeredTokenKey(exerciseIndex, tokenIndex)
+      return { wrongGuesses: { ...state.wrongGuesses, [key]: [...(state.wrongGuesses[key] ?? []), guess] } }
+    }),
   unanswerToken: (exerciseIndex, tokenIndex) =>
     set((state) => {
       const key = answeredTokenKey(exerciseIndex, tokenIndex)
-      if (!(key in state.answeredTokens)) return state
+      const wasAnswered = key in state.answeredTokens
+      if (!wasAnswered && !(key in state.wrongGuesses)) return state
 
       const answeredTokens = { ...state.answeredTokens }
+      const wrongGuesses = { ...state.wrongGuesses }
       delete answeredTokens[key]
+      delete wrongGuesses[key]
       return {
         answeredTokens,
-        totalAnswers: Math.max(0, state.totalAnswers - 1),
+        wrongGuesses,
+        totalAnswers: wasAnswered ? Math.max(0, state.totalAnswers - 1) : state.totalAnswers,
       }
     }),
   setLastResult: (lastResult) => set({ lastResult }),

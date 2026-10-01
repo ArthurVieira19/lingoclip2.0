@@ -151,6 +151,17 @@
   .font-display {
     font-family: var(--font-display), system-ui, sans-serif;
   }
+
+  /*
+   * Keyboard focus has to be obvious on every custom control, not only the
+   * shadcn ones. Uses the solid primary color (--ring is only ~50% opaque,
+   * too faint to count as a focus indicator). `:where` keeps specificity at
+   * zero so any component's own focus styles still win.
+   */
+  :where(button, [role="button"], a[href], summary, select, [tabindex="0"]):focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+  }
 }
 
 @layer components {
