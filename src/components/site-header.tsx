@@ -143,7 +143,7 @@ export function MobileTabBar() {
   const pathname = usePathname();
   const dueCount = useDueCount();
 
-  if (pathname.startsWith("/game/") || isPublicPath(pathname)) return null;
+  if (pathname.startsWith("/game") || isPublicPath(pathname)) return null;
 
   return (
     <nav

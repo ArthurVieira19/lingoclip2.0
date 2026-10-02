@@ -56,7 +56,7 @@ export const authService = {
       await prepareSignOut()
       await getSupabase().auth.signOut()
     } finally {
-      window.location.assign("/login")
+      window.location.assign(`${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/login`)
     }
   },
 }

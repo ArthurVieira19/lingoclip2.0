@@ -131,7 +131,7 @@ export default function AddSongPage() {
       setSaving(false);
       return;
     }
-    router.push(`/game/${song.id}`);
+    router.push(`/game?id=${encodeURIComponent(song.id)}`);
   }
 
   // The form is hidden for everyone else, but the database is what actually refuses non-admin writes.

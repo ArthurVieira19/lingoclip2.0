@@ -261,7 +261,7 @@ function DailyChallenge({ song }: { song: Song }) {
       className="mb-8 md:mb-10"
     >
       <Link
-        href={`/game/${song.id}`}
+        href={`/game?id=${encodeURIComponent(song.id)}`}
         className="group glass relative flex flex-col overflow-hidden rounded-2xl transition-shadow duration-300 hover:shadow-[0_24px_48px_-28px_var(--glow-primary)] sm:flex-row"
       >
         <div

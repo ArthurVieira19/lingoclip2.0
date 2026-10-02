@@ -83,7 +83,7 @@ export function SongCard({
       className={cn("group relative", className)}
     >
       <Link
-        href={`/game/${song.id}`}
+        href={`/game?id=${encodeURIComponent(song.id)}`}
         className="block rounded-2xl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
       >
         <div className="glass overflow-hidden rounded-2xl transition-[transform,box-shadow] duration-300 ease-[var(--ease-out-quint)] group-hover:-translate-y-1 group-hover:shadow-[0_18px_40px_-22px_var(--glow-primary)] group-active:scale-[0.98]">

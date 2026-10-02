@@ -56,7 +56,7 @@ Mandatory:
 
 - Supabase (`@supabase/supabase-js`, `@supabase/ssr`) for auth and Postgres
 
-No custom backend API: everything runs in the browser, and `src/middleware.ts` only refreshes the session and gates pages behind login.
+No custom backend API: everything runs in the browser. The site is a static export (`output: "export"`) hosted on GitHub Pages (`.github/workflows/pages.yml`, base path `/lingoclip2.0` via `NEXT_PUBLIC_BASE_PATH`), so there is no middleware: `AuthGate` gates pages behind login on the client. The game route is `/game?id=<songId>` because song ids come from the database and cannot be pre-rendered.
 
 ---
 
@@ -65,7 +65,7 @@ No custom backend API: everything runs in the browser, and `src/middleware.ts` o
 Supabase is the source of truth; LocalStorage is a synchronous cache in front of it, so the stores stay sync.
 
 - `src/services/storage/` — `storageService` reads/writes the LocalStorage cache and queues a debounced upsert after every save.
-- `src/services/supabase/` — browser client, middleware, and `userDataSync` (pull on login, debounced push, reset, sign-out flush).
+- `src/services/supabase/` — browser client and `userDataSync` (pull on login, debounced push, reset, sign-out flush).
 - `src/services/songs/songRepository.ts` — the global song library.
 - `src/services/auth/authService.ts` — login, sign-up, sign-out.
 

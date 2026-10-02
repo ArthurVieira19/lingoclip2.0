@@ -72,7 +72,7 @@ export default function ResultsPage() {
         {song && (
           <Button
             className="h-11 gap-2 rounded-full px-6 text-base"
-            render={<Link href={`/game/${song.id}`} />}
+            render={<Link href={`/game?id=${encodeURIComponent(song.id)}`} />}
             nativeButton={false}
           >
             <RotateCcw aria-hidden className="size-4" />
