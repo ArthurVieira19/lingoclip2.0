@@ -24,7 +24,7 @@ describe("SongCard", () => {
 
   it("links to the song's game page", () => {
     render(<SongCard song={song} />)
-    expect(screen.getByRole("link")).toHaveAttribute("href", "/game/test-song")
+    expect(screen.getByRole("link")).toHaveAttribute("href", "/game?id=test-song")
   })
 
   it("falls back through lower-resolution thumbnails, then to a placeholder", () => {

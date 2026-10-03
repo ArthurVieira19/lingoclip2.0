@@ -7,6 +7,8 @@ import {
   BookOpenCheck,
   ChartColumn,
   CircleQuestionMark,
+  Flame,
+  House,
   LibraryBig,
   LogOut,
   Music2,
@@ -15,20 +17,48 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { useReviewStore } from "@/stores/reviewStore";
+import { useStatsStore } from "@/stores/statsStore";
+import { useAuthStore } from "@/stores/authStore";
 import { authService } from "@/services/auth/authService";
 import { isPublicPath } from "@/lib/authPaths";
 import { cn } from "@/lib/utils";
 
 const NAV_LINKS: { href: string; label: string; icon: LucideIcon }[] = [
+  { href: "/", label: "Home", icon: House },
   { href: "/library", label: "Library", icon: LibraryBig },
   { href: "/review", label: "Review", icon: BookOpenCheck },
   { href: "/statistics", label: "Stats", icon: ChartColumn },
   { href: "/leaderboard", label: "Ranking", icon: Trophy },
-  { href: "/how-to-play", label: "How to play", icon: CircleQuestionMark },
 ];
 
 function isActivePath(pathname: string, href: string) {
+  if (href === "/") return pathname === "/";
   return pathname === href || pathname.startsWith(`${href}/`);
+}
+
+/** Streak and level, always in view — the two numbers a returning player checks first. */
+function ProgressChip() {
+  const streak = useStatsStore((s) => s.progress.streak);
+  const level = useStatsStore((s) => s.progress.level);
+  const isSignedIn = useAuthStore((s) => s.status === "authenticated");
+  if (!isSignedIn) return null;
+
+  return (
+    <Link
+      href="/statistics"
+      aria-label={`${streak}-day streak, level ${level}. Open statistics`}
+      className="mr-1 flex h-9 items-center gap-2.5 rounded-full border border-border px-3 text-sm font-semibold whitespace-nowrap tabular-nums transition-colors duration-200 hover:bg-accent"
+    >
+      <span className={cn("flex items-center gap-1", streak > 0 ? "text-secondary" : "text-muted-foreground")}>
+        <Flame aria-hidden className="size-4" fill={streak > 0 ? "currentColor" : "none"} />
+        {streak}
+      </span>
+      <span aria-hidden className="h-4 w-px bg-border" />
+      <span className="text-muted-foreground">
+        Lv <span className="text-foreground">{level}</span>
+      </span>
+    </Link>
+  );
 }
 
 function useDueCount() {
@@ -105,12 +135,26 @@ export function SiteHeader() {
               );
             })}
           </nav>
+          <span aria-hidden className="mx-2 hidden h-5 w-px bg-border md:block" />
+          <ProgressChip />
+          <Link
+            href="/how-to-play"
+            aria-label="How to play"
+            title="How to play"
+            aria-current={pathname === "/how-to-play" ? "page" : undefined}
+            className={cn(
+              "flex size-10 items-center justify-center rounded-full transition-colors duration-200 hover:bg-accent hover:text-foreground md:size-9",
+              pathname === "/how-to-play" ? "bg-accent text-foreground" : "text-muted-foreground",
+            )}
+          >
+            <CircleQuestionMark aria-hidden className="size-[1.125rem]" />
+          </Link>
           <Link
             href="/settings"
             aria-label="Settings"
             aria-current={pathname === "/settings" ? "page" : undefined}
             className={cn(
-              "group flex size-10 items-center justify-center rounded-full transition-colors duration-200 hover:bg-accent hover:text-foreground md:ml-1 md:size-9",
+              "group flex size-10 items-center justify-center rounded-full transition-colors duration-200 hover:bg-accent hover:text-foreground md:size-9",
               pathname === "/settings" ? "bg-accent text-foreground" : "text-muted-foreground",
             )}
           >
@@ -124,7 +168,7 @@ export function SiteHeader() {
             aria-label="Log out"
             title="Log out"
             onClick={() => void authService.signOut()}
-            className="flex size-10 items-center justify-center rounded-full text-muted-foreground transition-colors duration-200 hover:bg-accent hover:text-foreground md:size-9"
+            className="hidden size-9 items-center justify-center rounded-full text-muted-foreground transition-colors duration-200 hover:bg-accent hover:text-foreground md:flex"
           >
             <LogOut aria-hidden className="size-[1.125rem]" />
           </button>

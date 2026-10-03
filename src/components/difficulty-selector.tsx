@@ -13,33 +13,33 @@ interface DifficultyOption {
   value: Difficulty
   label: string
   icon: React.ReactNode
-  className: string
+  tone: string
 }
 
 const DIFFICULTY_OPTIONS: DifficultyOption[] = [
   {
     value: "beginner",
     label: "Beginner",
-    icon: <Smile className="size-6" />,
-    className: "bg-secondary text-secondary-foreground",
+    icon: <Smile className="size-5" />,
+    tone: "text-secondary",
   },
   {
     value: "intermediate",
     label: "Intermediate",
-    icon: <Meh className="size-6" />,
-    className: "bg-primary text-primary-foreground",
+    icon: <Meh className="size-5" />,
+    tone: "text-primary",
   },
   {
     value: "advanced",
     label: "Advanced",
-    icon: <Frown className="size-6" />,
-    className: "bg-orange-500 text-white",
+    icon: <Frown className="size-5" />,
+    tone: "text-orange-400",
   },
   {
     value: "expert",
     label: "Expert",
-    icon: <Skull className="size-6" />,
-    className: "bg-destructive text-white",
+    icon: <Skull className="size-5" />,
+    tone: "text-destructive",
   },
 ]
 
@@ -57,16 +57,17 @@ export function DifficultySelector({
   const lastUsed = useSettingsStore((s) => s.settings.defaultDifficulty)
 
   return (
-    <SetupStep song={song} step={2} totalSteps={2} question="Choose a difficulty to start" onBack={onBack}>
+    <SetupStep song={song} step={2} totalSteps={2} question="How many words should be hidden?" onBack={onBack}>
       <div role="group" aria-label="Choose a difficulty" className="flex flex-col gap-3">
-        {DIFFICULTY_OPTIONS.map(({ value, label, icon, className }, index) => (
+        {DIFFICULTY_OPTIONS.map(({ value, label, icon, tone }, index) => (
           <SetupOption
             key={value}
             index={index}
             icon={icon}
             label={label}
             description={`Fill in ${counts[value]} of ${total} words`}
-            className={className}
+            tone={tone}
+            meter={total > 0 ? counts[value] / total : 0}
             badge={value === lastUsed ? "Last used" : undefined}
             onClick={() => onSelect(value)}
           />

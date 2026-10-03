@@ -6,11 +6,11 @@ product
 
 ## Users
 
-English learners who practice listening comprehension by filling in the blanks of song lyrics while a YouTube music video plays. No accounts, no backend — everything runs and persists (progress, XP, streaks, achievements) in the browser via LocalStorage. Sessions are short, focused bursts (one song at a time), often replayed multiple times to improve accuracy.
+English learners who practice listening comprehension by filling in the blanks of song lyrics while a YouTube music video plays. Players log in (Supabase Auth) and their progress, XP, streaks and achievements sync to their account, with LocalStorage as an instant cache in front of it; the song library is shared and curated by admins. Sessions are short, focused bursts (one song at a time), often replayed multiple times to improve accuracy.
 
 ## Product Purpose
 
-SongGap is an original take on the fill-in-the-missing-lyrics game mechanic: pick a song, watch the music video, type or select the words hidden in the synced lyrics before the line passes. Success looks like a player staying immersed in the video and the music while still being able to type comfortably, understanding at a glance what to do next, and coming back for more songs/streaks without ever hitting a login wall or a confusing screen.
+SongGap is an original take on the fill-in-the-missing-lyrics game mechanic: pick a song, watch the music video, type or select the words hidden in the synced lyrics before the line passes. Success looks like a player staying immersed in the video and the music while still being able to type comfortably, understanding at a glance what to do next, and coming back for more songs/streaks without ever hitting a confusing screen. Login happens once; after that the app should feel as instant as a local one.
 
 ## Brand Personality
 
@@ -29,7 +29,7 @@ A deliberate mix of Spotify (moody, music-first, dark-by-default, content takes 
 1. **Video and lyrics stay close together.** The player is never more than a glance away from the text the user is typing into — proximity beats decoration every time a layout choice has to pick one.
 2. **Feedback is immediate and game-like, never punitive.** Correct answers celebrate (motion, color, sound-adjacent visual cues); mistakes give another try (retry-rewind) rather than a dead end.
 3. **Glassmorphism is a considered material, not a reflex.** `.glass` frosted panels are the established "Marquee" surface language — use them for real elevated surfaces (player, panels, HUD chips), not as decoration on everything.
-4. **Local-first means zero friction.** No auth, no loading spinners waiting on a server — every interaction should feel instant, since all state is already in the browser.
+4. **Cache-first means zero friction.** After login, every interaction reads from the local cache and feels instant; syncing to the account happens in the background, never behind a spinner.
 5. **Playable without a mouse.** Because it's a fast-paced typing game, keyboard flow (tab order, focus rings, auto-focus on the next blank) is as core to the experience as the visuals.
 
 ## Accessibility & Inclusion

@@ -2,13 +2,25 @@
 
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { PartyPopper, RotateCcw, Sparkles } from "lucide-react";
+import { Music2, RotateCcw } from "lucide-react";
 import { useGameStore } from "@/stores/gameStore";
 import { findSong } from "@/data/songs";
 import { useLibraryStore } from "@/stores/libraryStore";
 import { Button } from "@/components/ui/button";
+import { AmbientArt } from "@/components/ambient-art";
 import { CelebrationBurst } from "@/components/celebration-burst";
+import { SongThumbnail, songHref } from "@/components/song-card";
 import { useCountUp } from "@/hooks/useCountUp";
+
+const EASE_OUT = [0.22, 1, 0.36, 1] as const;
+
+/** Praise that matches the run, so a 40% round isn't congratulated like a perfect one. */
+function verdict(accuracy: number): { title: string; line: string } {
+  if (accuracy >= 95) return { title: "Flawless ear", line: "You caught nearly every word." };
+  if (accuracy >= 80) return { title: "Great listening", line: "Most of it landed. The misses are waiting in Review." };
+  if (accuracy >= 55) return { title: "Solid run", line: "Play it once more and watch the number climb." };
+  return { title: "Every listen counts", line: "The words you missed are saved for Review, and the song gets easier each time." };
+}
 
 export default function ResultsPage() {
   const lastResult = useGameStore((s) => s.lastResult);
@@ -17,99 +29,91 @@ export default function ResultsPage() {
 
   if (!lastResult) {
     return (
-      <div className="mx-auto max-w-xl px-4 py-24 text-center">
-        <p className="text-muted-foreground">No results yet — play a song first.</p>
-        <Button className="mt-4" render={<Link href="/library" />} nativeButton={false}>
-          Browse songs
+      <div className="mx-auto flex max-w-md flex-col items-center px-4 py-24 text-center">
+        <span aria-hidden className="glass flex size-14 items-center justify-center rounded-2xl text-muted-foreground">
+          <Music2 className="size-6" />
+        </span>
+        <h1 className="mt-4 font-display text-xl font-semibold">No results yet</h1>
+        <p className="mt-1 text-muted-foreground">Finish a song and your score shows up here.</p>
+        <Button className="mt-5 rounded-full" render={<Link href="/" />} nativeButton={false}>
+          Play today&apos;s pick
         </Button>
       </div>
     );
   }
 
   const song = findSong(lastResult.songId, librarySongs);
+  const { title, line } = verdict(lastResult.accuracy);
 
   return (
-    <div className="relative mx-auto flex max-w-xl flex-col items-center overflow-hidden px-4 py-16 text-center">
-      <div aria-hidden className="glow-blob left-1/2 top-0 size-72 -translate-x-1/2 bg-secondary/30" />
+    <div className="relative isolate mx-auto flex max-w-xl flex-col items-center px-4 pt-10 pb-14 text-center md:pt-14">
+      {song && <AmbientArt song={song} />}
 
       <div className="relative">
         <CelebrationBurst />
         <motion.div
-          initial={{ scale: 0.7, opacity: 0, rotate: -12 }}
-          animate={{ scale: 1, opacity: 1, rotate: 0 }}
-          transition={{ type: "spring", stiffness: 260, damping: 18 }}
-          className="glass relative flex size-16 items-center justify-center rounded-2xl text-secondary shadow-[0_0_40px_-10px_var(--glow-secondary)]"
+          initial={{ scale: 0.9, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ duration: 0.4, ease: EASE_OUT }}
         >
-          <PartyPopper aria-hidden className="size-7" />
+          {song ? (
+            <SongThumbnail
+              song={song}
+              className="w-52 rounded-xl shadow-[0_8px_8px_-6px_oklch(0_0_0/50%)] ring-1 ring-foreground/10"
+            />
+          ) : (
+            <span className="glass flex size-20 items-center justify-center rounded-2xl text-secondary">
+              <Music2 aria-hidden className="size-8" />
+            </span>
+          )}
         </motion.div>
       </div>
 
-      <h1 className="relative mt-5 font-display text-2xl font-semibold">
-        {song ? song.title : "Song complete"}
-      </h1>
-      <p className="relative text-muted-foreground">Nice work — here&apos;s how you did.</p>
+      <p className="mt-6 text-sm text-muted-foreground">{song ? `${song.title} · ${song.artist}` : "Song complete"}</p>
+      <h1 className="mt-1 font-display text-3xl font-semibold tracking-tight text-balance">{title}</h1>
+      <p className="mt-1 max-w-sm text-muted-foreground text-pretty">{line}</p>
 
-      <div className="relative my-8">
-        <p className="tabular-nums font-display text-6xl font-bold text-marquee-gradient">
-          {score}
-        </p>
-        <p className="mt-1 flex items-center justify-center gap-1 text-sm text-muted-foreground">
-          <Sparkles aria-hidden className="size-3.5" /> points
-        </p>
+      <div className="my-8">
+        <p className="font-display text-6xl font-bold text-secondary tabular-nums">{score}</p>
+        <p className="mt-1 text-sm text-muted-foreground">points</p>
       </div>
 
-      <div className="relative grid w-full grid-cols-3 gap-3">
-        <Stat label="Accuracy" value={`${lastResult.accuracy.toFixed(0)}%`} delay={0.1} />
-        <Stat label="Max combo" value={lastResult.maxCombo} delay={0.2} />
-        <Stat
-          label="Correct"
-          value={`${lastResult.correctAnswers}/${lastResult.totalAnswers}`}
-          delay={0.3}
-        />
-      </div>
+      <motion.dl
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3, ease: EASE_OUT, delay: 0.2 }}
+        className="glass grid w-full grid-cols-3 divide-x divide-border rounded-xl"
+      >
+        {[
+          { label: "Accuracy", value: `${lastResult.accuracy.toFixed(0)}%` },
+          { label: "Best combo", value: `×${lastResult.maxCombo}` },
+          { label: "Words caught", value: `${lastResult.correctAnswers}/${lastResult.totalAnswers}` },
+        ].map(({ label, value }) => (
+          <div key={label} className="flex flex-col-reverse gap-0.5 px-3 py-4">
+            <dt className="text-sm text-muted-foreground">{label}</dt>
+            <dd className="font-display text-xl font-semibold tabular-nums">{value}</dd>
+          </div>
+        ))}
+      </motion.dl>
 
-      <div className="relative mt-8 flex w-full flex-col gap-3 sm:w-auto sm:flex-row">
+      <div className="mt-8 flex w-full flex-col gap-3 sm:w-auto sm:flex-row">
         {song && (
           <Button
             className="h-11 gap-2 rounded-full px-6 text-base"
-            render={<Link href={`/game?id=${encodeURIComponent(song.id)}`} />}
+            render={<Link href={songHref(song)} />}
             nativeButton={false}
           >
             <RotateCcw aria-hidden className="size-4" />
             Play again
           </Button>
         )}
-        <Button
-          variant="outline"
-          className="h-11 rounded-full px-6"
-          render={<Link href="/library" />}
-          nativeButton={false}
-        >
+        <Button variant="outline" className="h-11 rounded-full px-6" render={<Link href="/library" />} nativeButton={false}>
           Another song
         </Button>
-        <Button
-          variant="ghost"
-          className="h-11 rounded-full px-6"
-          render={<Link href="/statistics" />}
-          nativeButton={false}
-        >
-          Statistics
+        <Button variant="ghost" className="h-11 rounded-full px-6" render={<Link href="/review" />} nativeButton={false}>
+          Review missed words
         </Button>
       </div>
     </div>
-  );
-}
-
-function Stat({ label, value, delay }: { label: string; value: string | number; delay: number }) {
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay, duration: 0.35 }}
-      className="glass rounded-xl px-3 py-4"
-    >
-      <p className="tabular-nums font-display text-xl font-semibold">{value}</p>
-      <p className="text-xs text-muted-foreground">{label}</p>
-    </motion.div>
   );
 }

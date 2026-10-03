@@ -3,120 +3,168 @@
 import Link from "next/link";
 import { motion } from "framer-motion";
 import {
-  ListMusic,
-  Gauge,
-  Ear,
-  Keyboard,
-  RotateCcw,
-  Save,
   ArrowRight,
   BookOpen,
-  Turtle,
   BookOpenCheck,
+  CloudCheck,
+  Ear,
+  Gauge,
+  Keyboard,
+  ListMusic,
+  RotateCcw,
+  Turtle,
+  type LucideIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-const STEPS = [
+const EASE_OUT = [0.22, 1, 0.36, 1] as const;
+
+/** A real sequence, so it's the one place numbers belong. */
+const ROUND: { icon: LucideIcon; title: string; body: string }[] = [
   {
     icon: ListMusic,
     title: "Pick a song",
-    body: "Browse the library and choose any track — or drop in your own YouTube link and lyrics from the Add song page.",
+    body: "Start from today's pick on the home screen, or browse the library by level.",
   },
   {
     icon: Gauge,
-    title: "Choose a difficulty",
-    body: "Beginner hides a few words, Expert hides them all. Each level shows exactly how many words you'll need to fill in before you start.",
+    title: "Choose how hard",
+    body: "Type each word or pick from four options, then a level: Beginner hides a few words, Expert hides them all.",
   },
   {
     icon: Ear,
-    title: "Watch, listen, and type",
-    body: "The video plays and the lyrics scroll right underneath it. When a line's your turn, its blanks light up — type what you hear.",
+    title: "Listen and fill the gaps",
+    body: "The video plays and the lyrics follow along. When a line comes up, its blanks light up. Type what you hear.",
   },
+];
+
+const HELPERS: { icon: LucideIcon; title: string; body: string }[] = [
   {
-    icon: Keyboard,
-    title: "No need to hit Enter",
-    body: "Get close enough — a missing apostrophe, a doubled letter, one letter short — and the blank confirms itself. Enter still works if you prefer it.",
+    icon: RotateCcw,
+    title: "Missed it? It waits for you",
+    body: "If a line ends before you finish, the video pauses there. Fill the blank when you're ready, or replay the line.",
   },
   {
     icon: Turtle,
-    title: "Too fast? Slow it down",
-    body: "Rap verses and mumbled lines are fair game — drop the speed to 0.75x or 0.5x from the transport bar and the words separate out. Pitch stays natural.",
+    title: "Slow it down",
+    body: "Drop to 0.75x or 0.5x from the transport bar for fast verses. The pitch stays natural.",
   },
   {
-    icon: RotateCcw,
-    title: "Miss one? You get a retry",
-    body: "Run out of time on a line and the video pauses right there — no rush. Finish the blank whenever you're ready, or hit \"Play line again\" to hear it once more.",
+    icon: Keyboard,
+    title: "Close enough counts",
+    body: "A missing apostrophe or one letter off still confirms the blank. You don't even need Enter.",
   },
   {
     icon: BookOpen,
     title: "Tap any word you don't know",
-    body: "Every visible word in the lyrics is tappable — it opens the English definition, part of speech, and pronunciation right there, without stopping the song.",
+    body: "Every visible word opens its definition and pronunciation, without stopping the song.",
   },
+];
+
+const AFTER: { icon: LucideIcon; title: string; body: string }[] = [
   {
     icon: BookOpenCheck,
-    title: "Come back for the words you missed",
-    body: "Anything you get wrong is remembered and resurfaced on the Review page days later, mixed in from every song you've played — spacing them out is what makes them stick.",
+    title: "Words you miss come back",
+    body: "Every missed word goes to Review, with the line it came from. It returns after 1, 3, 7, 16 and 35 days, the spacing that makes words stick.",
   },
   {
-    icon: Save,
-    title: "Your progress saves itself",
-    body: "No account, no sign-in. Score, streaks, XP, and achievements are saved right in your browser the moment you play.",
+    icon: CloudCheck,
+    title: "Saved to your account",
+    body: "XP, streaks, achievements and review words sync as you play, so you can pick up on any device.",
   },
 ];
 
 export default function HowToPlayPage() {
   return (
-    <div className="mx-auto max-w-2xl px-4 py-14">
-      <div className="text-center">
-        <h1 className="font-display text-3xl font-semibold tracking-tight text-balance">
-          How to play
-        </h1>
-        <p className="mt-2 text-muted-foreground text-balance">
-          Everything between you and your first song — and what keeps it sticking after.
+    <div className="mx-auto max-w-5xl px-4 pt-8 pb-14 md:pt-12">
+      <header className="max-w-2xl">
+        <h1 className="font-display text-2xl font-semibold tracking-tight md:text-3xl">How to play</h1>
+        <p className="mt-2 text-muted-foreground text-pretty md:text-lg">
+          A round takes one song, about three minutes. Here&apos;s everything that happens in it, and after it.
         </p>
+      </header>
+
+      <section aria-labelledby="round-title" className="mt-10">
+        <h2 id="round-title" className="font-display text-lg font-semibold">
+          A round, start to finish
+        </h2>
+        <ol className="mt-4 grid gap-4 md:grid-cols-3">
+          {ROUND.map((step, index) => {
+            const Icon = step.icon;
+            return (
+              <motion.li
+                key={step.title}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.3, ease: EASE_OUT, delay: index * 0.06 }}
+                className="glass relative rounded-2xl p-5"
+              >
+                <div className="flex items-center justify-between">
+                  <span
+                    aria-hidden
+                    className="flex size-9 items-center justify-center rounded-full bg-foreground font-display text-sm font-semibold text-background"
+                  >
+                    {index + 1}
+                  </span>
+                  <Icon aria-hidden className="size-5 text-muted-foreground" />
+                </div>
+                <h3 className="mt-4 font-semibold">{step.title}</h3>
+                <p className="mt-1 text-sm text-muted-foreground text-pretty">{step.body}</p>
+              </motion.li>
+            );
+          })}
+        </ol>
+      </section>
+
+      <div className="mt-12 grid gap-10 md:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] md:gap-12">
+        <FeatureList title="When it gets tough" items={HELPERS} columns />
+        <FeatureList title="After the song ends" items={AFTER} />
       </div>
 
-      <ol className="mt-10 flex flex-col gap-4">
-        {STEPS.map((step, index) => {
-          const Icon = step.icon;
-          return (
-            <motion.li
-              key={step.title}
-              initial={{ opacity: 0, y: 14 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.35, ease: "easeOut", delay: index * 0.07 }}
-              className="glass flex items-start gap-4 rounded-2xl p-5"
-            >
-              <span
-                aria-hidden
-                className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary/15 font-display text-sm font-semibold text-primary"
-              >
-                {index + 1}
-              </span>
-              <div className="flex-1">
-                <div className="flex items-center gap-2">
-                  <Icon aria-hidden className="size-4 text-primary" />
-                  <h2 className="font-display text-base font-semibold">{step.title}</h2>
-                </div>
-                <p className="mt-1 text-sm text-muted-foreground">{step.body}</p>
-              </div>
-            </motion.li>
-          );
-        })}
-      </ol>
-
-      <div className="mt-10 flex flex-col items-center gap-3 text-center">
-        <p className="text-sm text-muted-foreground">Ready to give it a try?</p>
+      <div className="mt-12 flex flex-col items-start gap-4 border-t border-border pt-8 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-muted-foreground">That&apos;s all of it. The best way to learn it is one song.</p>
         <Button
           size="lg"
           className="group h-11 gap-2 rounded-full px-6"
-          render={<Link href="/library" />}
+          render={<Link href="/" />}
           nativeButton={false}
         >
-          Browse songs
+          Play today&apos;s pick
           <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />
         </Button>
       </div>
     </div>
+  );
+}
+
+function FeatureList({
+  title,
+  items,
+  columns = false,
+}: {
+  title: string;
+  items: { icon: LucideIcon; title: string; body: string }[];
+  columns?: boolean;
+}) {
+  return (
+    <section>
+      <h2 className="font-display text-lg font-semibold">{title}</h2>
+      <ul className={columns ? "mt-4 grid gap-x-8 gap-y-6 sm:grid-cols-2" : "mt-4 grid gap-6"}>
+        {items.map(({ icon: Icon, title: itemTitle, body }) => (
+          <li key={itemTitle} className="flex gap-3">
+            <span
+              aria-hidden
+              className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-foreground/[0.06] text-primary"
+            >
+              <Icon className="size-[1.125rem]" />
+            </span>
+            <div>
+              <h3 className="font-semibold">{itemTitle}</h3>
+              <p className="mt-1 text-sm text-muted-foreground text-pretty">{body}</p>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }

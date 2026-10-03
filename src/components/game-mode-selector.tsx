@@ -11,7 +11,7 @@ interface GameModeOption {
   label: string
   description: string
   icon: React.ReactNode
-  className: string
+  tone: string
 }
 
 const GAME_MODE_OPTIONS: GameModeOption[] = [
@@ -19,15 +19,15 @@ const GAME_MODE_OPTIONS: GameModeOption[] = [
     value: "typing",
     label: "Typing",
     description: "Type each missing word yourself, letter by letter.",
-    icon: <Keyboard className="size-6" />,
-    className: "bg-primary text-primary-foreground",
+    icon: <Keyboard className="size-5" />,
+    tone: "text-primary",
   },
   {
     value: "multipleChoice",
     label: "Choice",
     description: "Pick the missing word from 4 options.",
-    icon: <ListChecks className="size-6" />,
-    className: "bg-secondary text-secondary-foreground",
+    icon: <ListChecks className="size-5" />,
+    tone: "text-secondary",
   },
 ]
 
@@ -43,14 +43,14 @@ export function GameModeSelector({
   return (
     <SetupStep song={song} step={1} totalSteps={2} question="How do you want to fill in the blanks?">
       <div role="group" aria-label="Choose a game mode" className="flex flex-col gap-3">
-        {GAME_MODE_OPTIONS.map(({ value, label, description, icon, className }, index) => (
+        {GAME_MODE_OPTIONS.map(({ value, label, description, icon, tone }, index) => (
           <SetupOption
             key={value}
             index={index}
             icon={icon}
             label={label}
             description={description}
-            className={className}
+            tone={tone}
             badge={value === lastUsed ? "Last used" : undefined}
             onClick={() => onSelect(value)}
           />

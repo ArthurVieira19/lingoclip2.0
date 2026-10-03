@@ -35,11 +35,11 @@ typography:
     lineHeight: 1.3
     letterSpacing: "normal"
 rounded:
-  sm: "0.605rem"
-  md: "0.825rem"
-  lg: "1.1rem"
-  xl: "1.485rem"
-  2xl: "1.87rem"
+  sm: "0.344rem"
+  md: "0.469rem"
+  lg: "0.625rem"
+  xl: "0.844rem"
+  2xl: "1.0625rem"
   full: "9999px"
 spacing:
   xs: "0.5rem"
@@ -121,10 +121,10 @@ A one-accent-pair system: warm near-black as the stage, coral as the spotlight, 
 
 ## 4. Elevation
 
-SongGap uses a hybrid of translucency and soft ambient shadow rather than a stepped Material elevation scale. The signature `.glass` treatment — `color-mix` translucent card fill, `backdrop-filter: blur(16px)`, a 1px near-transparent border, an inset top highlight, and one wide/soft outer shadow — is the *only* elevation vocabulary in the system. Flatter surfaces (page background, plain text rows) carry no shadow at all; there is no separate "card shadow" system independent of glass.
+SongGap uses a hybrid of translucency and soft ambient shadow rather than a stepped Material elevation scale. The signature `.glass` treatment — `color-mix` translucent card fill, `backdrop-filter: blur(16px)`, a 1px near-transparent border, an inset top highlight, and one short, tight outer shadow — is the *only* elevation vocabulary in the system. Flatter surfaces (page background, plain text rows) carry no shadow at all; there is no separate "card shadow" system independent of glass.
 
 ### Shadow Vocabulary
-- **Glass ambient** (`0 1px 0 0 color-mix(in oklch, var(--foreground) 6%, transparent) inset, 0 20px 40px -24px oklch(0 0 0 / 55%)`): the only shadow in the system, paired 1:1 with `.glass`. Used on the video frame, HUD stat chips, lyrics panel, dialogs, cards.
+- **Glass ambient** (`0 1px 0 0 color-mix(in oklch, var(--foreground) 6%, transparent) inset, 0 2px 8px -2px oklch(0 0 0 / 35%)`; tightened from a 40px-blur drop shadow in the 2026-10-03 redesign, since a hairline border plus a wide soft shadow reads as a generic "ghost card"): the only shadow in the system, paired 1:1 with `.glass`. Used on the video frame, HUD stat chips, lyrics panel, dialogs, cards.
 - **Glow blooms** (`--glow-primary` / `--glow-secondary`, soft 35%/30% alpha color, blurred): not a shadow but the same "light source" idea — used behind active/primary buttons and success states to suggest the marquee bulb is lit.
 
 ### Named Rules
@@ -141,14 +141,19 @@ SongGap uses a hybrid of translucency and soft ambient shadow rather than a step
 - **Hover / Focus:** buttons nudge (`active:translate-y-px`), get a `focus-visible` ring at `ring-3 ring-ring/50`; primary/circular play-style controls additionally scale ~1.05 and carry a soft coral glow shadow
 
 ### Badges / Chips
-- **Style:** translucent tint of the relevant color (`bg-{color}/20`) with a matching border (`border-{color}/30`) and full-color text — used for difficulty tags (beginner=lime, intermediate=coral, advanced=orange-500, expert=ember) and HUD stat pills (`.glass` + full-pill radius)
+- **Style:** HUD stat pills are `.glass` + full-pill radius. Filter chips are neutral: the active one is a cream (`bg-foreground`) pill that glides via `layoutId`, never coral, so the screen's one coral thing stays the primary action.
+- **Difficulty meter** (`DifficultyMeter` in `song-card.tsx`): four rising bars (filled up to the level) plus the level name, in the level's color — beginner=lime, intermediate=coral, advanced=orange, expert=ember (`DIFFICULTY_TEXT`, with deeper shades in the light theme for small-text contrast). Replaces the old solid-color difficulty chips.
 
 ### Cards / Containers
-- **Corner Style:** `rounded-2xl` (1.87rem) for top-level cards (song cards, dialogs), `rounded-xl` (1.485rem) for nested media frames
-- **Background:** `.glass` (see Elevation) for anything "elevated" — song cards, the video frame wrapper, the lyrics panel, HUD chips, dialogs
+- **Corner Style:** `rounded-2xl` (~17px) for panels and dialogs, `rounded-xl` (~13px) for rows and media frames, `rounded-lg` for thumbnails. Nothing above ~17px except full pills.
+- **Background:** `.glass` (see Elevation) for anything "elevated" — panels, the lyrics panel, HUD chips, dialogs, setup choice rows
+- **Song cards are art-first, not boxed:** a 16:9 thumbnail (`rounded-lg`, hairline ring), with title, artist and difficulty meter sitting on the page below it. On hover the coral play button rises into the art's bottom-right corner; a "Played" chip sits top-left.
 - **Shadow Strategy:** glass ambient shadow only (see Elevation §4); no independent card shadow
 - **Border:** 1px `--border` (10% white on the dark card) as part of `.glass`, never a colored accent border and never a `border-left`/`border-right` stripe
-- **Internal Padding:** `p-4` for card content rows, `p-1.5` for the outer video-frame glass wrapper (a thin "bezel")
+- **Internal Padding:** `p-5`/`p-6` for panels; the video frame has no bezel any more (a hairline ring, so the video fills its 16:9 box — `.yt-frame` stretches the iframe the YouTube API injects)
+
+### Ambient art
+- `AmbientArt` blurs the current song's thumbnail (72px blur, saturated, ~40% opacity) into a full-viewport wash behind the top of the page, faded out by a radial mask before any edge. Used on Home (today's pick), the setup steps, the game and Results, so each screen is tinted by what's playing. Decoration only: text is always judged against the plain background below it.
 
 ### Inputs / Fields
 - **Style:** `bg-input/30` fill, 1px `--border`, `rounded-md`
@@ -157,8 +162,15 @@ SongGap uses a hybrid of translucency and soft ambient shadow rather than a step
 
 ### Navigation
 - **Style:** `.glass` sticky header, wordmark in two-tone type ("Song" in foreground, "Gap" in primary coral), flat text links with a muted→foreground hover shift, no underline
+- **Links:** Home, Library, Review (with a due-count badge), Stats, Ranking. To the right: a streak + level chip (links to Stats), then How to play (help icon), Settings and Log out.
 - **Active state:** a pill (`bg-accent`) that glides between links via a shared framer-motion `layoutId`
-- **Below `md`:** the header keeps only the wordmark and settings; primary nav moves to a fixed `.glass` bottom tab bar (icon + label, ≥48px targets, `env(safe-area-inset-bottom)` padding). The tab bar is hidden on `/game/*`, where the game's transport bar owns the bottom edge instead.
+- **Below `md`:** the header keeps the wordmark, the streak/level chip, help and settings (log out lives in Settings); primary nav moves to a fixed `.glass` bottom tab bar (icon + label, ≥48px targets, `env(safe-area-inset-bottom)` padding). The tab bar is hidden on `/game`, where the game's transport bar owns the bottom edge instead.
+
+### Screen structure (2026-10-03 redesign)
+- **Home** is a dashboard for a signed-in player, not a marketing hero: greeting, today's pick as a large art-backed hero, a progress panel (7-day streak strip, level bar, review link), then "Jump back in" / "Fresh for you" shelves.
+- **Library** is only the catalog: one sticky toolbar (search, played/level chips, sort) and a 2/3/4-column grid.
+- **Login / sign-up** split on desktop: a brand side with `LyricDemo` (a lyric line whose blank types itself and pays out +150) and the form side.
+- Page headers are left-aligned (`text-2xl md:text-3xl`) on every screen; centered layouts are kept for single-moment screens (Results, review summary).
 
 ### Game transport bar
 - One bar holds every playback control: rewind 10s/5s, a single Play/Pause toggle (the screen's one coral spotlight), speed, skip — plus a full-width progress bar with an "n/total words" count.
@@ -189,6 +201,6 @@ Optional, via Settings (dark stays the default). Surfaces flip lightness but kee
 - **Don't** introduce gray dashboard chrome, identical stat-card grids, or "admin panel" seriousness — SongGap is about music and play, not spreadsheets (per PRODUCT.md's anti-references).
 - **Don't** use mascots, oversized bubble shapes, or cartoon illustration — avoid reading as a children's literacy app (per PRODUCT.md's anti-references).
 - **Don't** ship an unstyled/generic template look — every surface carries the warm near-black + coral/lime identity (per PRODUCT.md's anti-references).
-- **Don't** use `background-clip: text` gradient headlines for emphasis — this system already has `.text-marquee-gradient`; reserve it for rare, large celebratory moments (results/achievement reveals), never body headings.
+- **Don't** use `background-clip: text` gradient text anywhere. `.text-marquee-gradient` was removed in the 2026-10-03 redesign; celebratory numbers (Results score, review XP) are solid Acid Lime.
 - **Don't** use a `border-left`/`border-right` colored stripe as a card accent. Use the full `.glass` border, a background tint, or a leading icon instead.
 - **Don't** let two elements compete for coral on the same screen (The One Spotlight Rule).

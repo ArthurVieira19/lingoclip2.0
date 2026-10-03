@@ -17,6 +17,8 @@ import { LyricsPanel } from "@/components/lyrics-panel";
 import { ExerciseChoicesView } from "@/components/exercise-line";
 import { PlaybackRateControl } from "@/components/playback-rate-control";
 import { MistakeNote, type MistakeNoteData } from "@/components/mistake-note";
+import { AmbientArt } from "@/components/ambient-art";
+import { DifficultyMeter, SongThumbnail } from "@/components/song-card";
 import { cn } from "@/lib/utils";
 
 const EASE_OUT = [0.22, 1, 0.36, 1] as const;
@@ -131,14 +133,22 @@ export function GameScreen({
 
   return (
     // Extra bottom clearance on phones: the fixed transport bar is taller than the tab bar that main's padding accounts for.
-    <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 pt-4 pb-10 lg:gap-5 lg:py-8">
+    <div className="relative isolate mx-auto flex max-w-7xl flex-col gap-4 px-4 pt-4 pb-10 lg:gap-5 lg:py-8">
+      <AmbientArt song={song} className="lg:-top-8" />
       <p role="status" aria-live="polite" className="sr-only">
         {announcement}
       </p>
       <div className="flex items-center justify-between gap-3">
-        <div className="min-w-0">
-          <h1 className="truncate font-display text-lg font-semibold lg:text-xl">{song.title}</h1>
-          <p className="truncate text-sm text-muted-foreground">{song.artist}</p>
+        <div className="flex min-w-0 items-center gap-3">
+          <SongThumbnail song={song} className="hidden w-20 shrink-0 rounded-md ring-1 ring-foreground/10 sm:block" />
+          <div className="min-w-0">
+            <h1 className="truncate font-display text-lg font-semibold lg:text-xl">{song.title}</h1>
+            <p className="flex items-center gap-2 truncate text-sm text-muted-foreground">
+              <span className="truncate">{song.artist}</span>
+              <span aria-hidden className="hidden sm:inline">·</span>
+              <DifficultyMeter difficulty={difficulty} className="hidden sm:inline-flex" />
+            </p>
+          </div>
         </div>
 
         <div className="relative flex shrink-0 gap-2">
@@ -169,11 +179,11 @@ export function GameScreen({
         <div className="flex flex-col gap-3">
           <div
             className={cn(
-              "glass overflow-hidden rounded-2xl p-1.5 transition-shadow duration-500",
-              isPlaying && "shadow-[0_0_48px_-16px_var(--glow-primary)]",
+              "overflow-hidden rounded-xl ring-1 ring-foreground/10 transition-shadow duration-500",
+              isPlaying && "shadow-[0_0_0_1px_var(--glow-primary)]",
             )}
           >
-            <div className="relative aspect-video w-full overflow-hidden rounded-xl bg-black">
+            <div className="yt-frame relative aspect-video w-full overflow-hidden bg-black">
               <div id={elementId} className="absolute inset-0" />
               {!controller.isReady && (
                 <div className="absolute inset-0 animate-pulse bg-gradient-to-br from-muted to-card" aria-hidden />
@@ -221,6 +231,14 @@ export function GameScreen({
               />
             </div>
           )}
+
+          {/* Desktop: the space under the video holds the cheat sheet, so the lyrics column stays only lyrics. */}
+          <div className="hidden flex-col gap-3 rounded-xl border border-border px-4 py-3.5 lg:flex">
+            <p className="text-sm text-muted-foreground">
+              Tap any word for its definition · tap a line to jump there
+            </p>
+            <ShortcutLegend />
+          </div>
         </div>
 
         <div className="flex flex-col gap-2">
@@ -234,11 +252,10 @@ export function GameScreen({
             fuzzy={fuzzyMatching}
           />
           {exercises.length > 0 && (
-            <p className="px-2 text-xs text-muted-foreground">
+            <p className="px-2 text-xs text-muted-foreground lg:hidden">
               Tap any word for its definition · tap a line to jump there
             </p>
           )}
-          <ShortcutLegend />
         </div>
       </div>
 
@@ -377,10 +394,10 @@ function TransportButton({
 /** Keyboard shortcut cheat-sheet — desktop only, since phones have no hardware keys to press. */
 function ShortcutLegend() {
   return (
-    <p className="hidden flex-wrap items-center gap-x-3 gap-y-1 px-2 text-xs text-muted-foreground lg:flex">
+    <p className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted-foreground">
       {GAME_SHORTCUT_LEGEND.map(({ keys, label }) => (
         <span key={keys} className="flex items-center gap-1.5">
-          <kbd className="rounded border border-border bg-accent/60 px-1.5 py-0.5 font-body text-[0.7rem] font-medium text-foreground/80">
+          <kbd className="rounded border border-border bg-accent/60 px-1.5 py-0.5 font-body text-xs font-medium text-foreground/80">
             {keys}
           </kbd>
           {label}

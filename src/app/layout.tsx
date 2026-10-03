@@ -63,7 +63,7 @@ export default function RootLayout({
             <ThemeSync />
             <OfflineBanner />
             <SiteHeader />
-            <main id="main-content" className="pb-safe-bar relative flex-1 md:pb-0">
+            <main id="main-content" className="pb-safe-bar relative flex-1 overflow-x-clip md:pb-0">
               <PageTransitions>
                 <AuthGate>{children}</AuthGate>
               </PageTransitions>

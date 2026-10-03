@@ -63,9 +63,12 @@ export default function LeaderboardPage() {
 
   const entries = current?.ok ? current.entries : [];
   const me = entries.find((entry) => entry.isMe);
+  // The top three get a podium once there are enough players for it to mean something.
+  const showPodium = entries.length >= 3 && entries[2].place === 3;
+  const rest = showPodium ? entries.slice(3) : entries;
 
   return (
-    <div className="mx-auto max-w-2xl space-y-5 px-4 py-8 md:py-12">
+    <div className="mx-auto max-w-2xl space-y-5 px-4 pt-8 pb-12 md:pt-12">
       <div>
         <h1 className="font-display text-2xl font-semibold tracking-tight md:text-3xl">Leaderboard</h1>
         <p className="mt-1 text-sm text-muted-foreground md:text-base">
@@ -73,7 +76,7 @@ export default function LeaderboardPage() {
         </p>
       </div>
 
-      <div role="group" aria-label="Ranking period" className="glass grid grid-cols-2 gap-1 rounded-full p-1">
+      <div role="group" aria-label="Ranking period" className="glass grid grid-cols-2 gap-1 rounded-full p-1 sm:max-w-xs">
         {PERIODS.map(({ value, label }) => (
           <button
             key={value}
@@ -81,13 +84,19 @@ export default function LeaderboardPage() {
             aria-pressed={period === value}
             onClick={() => setPeriod(value)}
             className={cn(
-              "min-h-10 rounded-full px-4 text-sm font-medium transition-colors duration-200",
-              period === value
-                ? "bg-primary text-primary-foreground"
-                : "text-muted-foreground hover:bg-accent hover:text-foreground",
+              "relative min-h-9 rounded-full px-4 text-sm font-medium transition-colors duration-200",
+              period === value ? "text-background" : "text-muted-foreground hover:text-foreground",
             )}
           >
-            {label}
+            {period === value && (
+              <motion.span
+                layoutId="leaderboard-period-pill"
+                aria-hidden
+                className="absolute inset-0 rounded-full bg-foreground"
+                transition={{ type: "spring", stiffness: 500, damping: 40 }}
+              />
+            )}
+            <span className="relative">{label}</span>
           </button>
         ))}
       </div>
@@ -121,21 +130,101 @@ export default function LeaderboardPage() {
       ) : (
         <>
           {!me && !hidden && <JoinHint period={period} />}
-          <motion.ol
-            key={period}
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.25, ease: EASE_OUT }}
-            aria-label={period === "weekly" ? "Weekly ranking" : "All-time ranking"}
-            className="glass divide-y divide-border overflow-hidden rounded-2xl"
-          >
-            {entries.map((entry) => (
-              <LeaderboardRow key={entry.userId} entry={entry} separated={isOutsideTop(entry)} />
-            ))}
-          </motion.ol>
+          {showPodium && <Podium key={`podium-${period}`} entries={entries.slice(0, 3)} />}
+          {rest.length > 0 && (
+            <motion.ol
+              key={period}
+              start={showPodium ? 4 : 1}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.25, ease: EASE_OUT, delay: showPodium ? 0.15 : 0 }}
+              aria-label={period === "weekly" ? "Weekly ranking" : "All-time ranking"}
+              className="glass divide-y divide-border overflow-hidden rounded-2xl"
+            >
+              {rest.map((entry) => (
+                <LeaderboardRow key={entry.userId} entry={entry} separated={isOutsideTop(entry)} />
+              ))}
+            </motion.ol>
+          )}
         </>
       )}
     </div>
+  );
+}
+
+/** Visual column per rank: 1st in the middle, 2nd on the left, 3rd on the right. DOM stays in rank order for screen readers. */
+const PODIUM_COLUMN = [1, 0, 2] as const;
+const PODIUM_STYLE = [
+  { height: "h-28 sm:h-32", tone: "text-amber-300", ring: "ring-amber-300/70" },
+  { height: "h-20 sm:h-24", tone: "text-slate-300", ring: "ring-slate-300/60" },
+  { height: "h-14 sm:h-16", tone: "text-orange-400", ring: "ring-orange-400/60" },
+];
+
+function initials(name: string): string {
+  return name
+    .split(/s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? "")
+    .join("");
+}
+
+/** First place in the middle and tallest, like the real thing; the steps rise in so the order reads as earned. */
+function Podium({ entries }: { entries: LeaderboardEntry[] }) {
+  return (
+    <ol aria-label="Top three" className="grid grid-cols-3 items-end gap-2 pt-4 sm:gap-3">
+      {entries.map((entry, index) => {
+        const style = PODIUM_STYLE[index];
+        return (
+          <li
+            key={entry.userId}
+            aria-label={`${ordinal(entry.place)}: ${entry.displayName}${entry.isMe ? " (you)" : ""}, level ${entry.level}, ${entry.score} XP`}
+            className="flex min-w-0 flex-col items-center text-center"
+            style={{ order: PODIUM_COLUMN[index] }}
+          >
+            <motion.div
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3, ease: EASE_OUT, delay: 0.25 + (2 - index) * 0.06 }}
+              className="flex w-full min-w-0 flex-col items-center"
+            >
+              {index === 0 && <Crown aria-hidden className="mb-1 size-5 text-amber-300" />}
+              <span
+                aria-hidden
+                className={cn(
+                  "flex items-center justify-center rounded-full bg-accent font-display font-semibold ring-2",
+                  index === 0 ? "size-16 text-xl" : "size-12 text-base",
+                  entry.isMe ? "ring-primary" : style.ring,
+                )}
+              >
+                {initials(entry.displayName)}
+              </span>
+              <p className="mt-2 w-full truncate px-1 text-sm font-semibold">
+                {entry.displayName}
+                {entry.isMe && <span className="ml-1 font-normal text-primary">(you)</span>}
+              </p>
+              <p className="text-sm text-muted-foreground tabular-nums">
+                {entry.score.toLocaleString("en-US")} XP
+              </p>
+            </motion.div>
+            <motion.div
+              aria-hidden
+              initial={{ scaleY: 0 }}
+              animate={{ scaleY: 1 }}
+              transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1], delay: (2 - index) * 0.06 }}
+              className={cn(
+                "glass mt-3 flex w-full origin-bottom items-start justify-center rounded-t-xl rounded-b-none border-b-0 pt-2 font-display text-2xl font-semibold",
+                style.height,
+                style.tone,
+                entry.isMe && "bg-primary/15",
+              )}
+            >
+              {entry.place}
+            </motion.div>
+          </li>
+        );
+      })}
+    </ol>
   );
 }
 

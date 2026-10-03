@@ -56,6 +56,44 @@ describe("fetchDefinition", () => {
     expect(await fetchDefinition("network-fail-word")).toBeNull()
   })
 
+  it("falls back to the second dictionary when the first is unreachable", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockRejectedValueOnce(new TypeError("Failed to fetch"))
+      .mockResolvedValueOnce(
+        jsonResponse({
+          word: "fallback-word",
+          entries: [
+            {
+              partOfSpeech: "noun",
+              pronunciations: [{ type: "ipa", text: "/fɔːl/" }],
+              senses: [{ definition: "A fallback sense.", examples: ["An example."] }],
+            },
+          ],
+        }),
+      )
+    vi.stubGlobal("fetch", fetchMock)
+
+    const entry = await fetchDefinition("fallback-word")
+
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(entry).toEqual({
+      word: "fallback-word",
+      phonetic: "/fɔːl/",
+      definitions: [{ partOfSpeech: "noun", definition: "A fallback sense.", example: "An example." }],
+    })
+  })
+
+  it("doesn't cache a failure when no dictionary could be reached", async () => {
+    const fetchMock = vi.fn().mockRejectedValue(new TypeError("Failed to fetch"))
+    vi.stubGlobal("fetch", fetchMock)
+
+    await fetchDefinition("offline-word")
+    await fetchDefinition("offline-word")
+
+    expect(fetchMock).toHaveBeenCalledTimes(4)
+  })
+
   it("caches results and only fetches once per word", async () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse([RAW_ENTRY]))
     vi.stubGlobal("fetch", fetchMock)

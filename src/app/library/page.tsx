@@ -4,47 +4,46 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
-import { ArrowRight, Loader2, Music2, Play, Plus, Search, Sparkles, X } from "lucide-react";
-import type { Song } from "@/types/Song";
+import { ArrowRight, Music2, Plus, Search, X } from "lucide-react";
 import type { Difficulty } from "@/types/Difficulty";
-import { SONGS, findSong } from "@/data/songs";
+import { SONGS } from "@/data/songs";
 import { useAuthStore } from "@/stores/authStore";
 import { useLibraryStore } from "@/stores/libraryStore";
 import { useStatsStore } from "@/stores/statsStore";
-import { hashStringToSeed } from "@/modules/game/seededRandom";
-import { DIFFICULTY_STYLES, SongCard, SongThumbnail } from "@/components/song-card";
+import { SongCard } from "@/components/song-card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
 type SortKey = "title" | "artist" | "difficulty";
 type DifficultyFilter = "all" | Difficulty;
+type PlayedFilter = "all" | "new" | "played";
 
 const DIFFICULTY_ORDER: Difficulty[] = ["beginner", "intermediate", "advanced", "expert"];
 const DIFFICULTY_FILTERS: DifficultyFilter[] = ["all", ...DIFFICULTY_ORDER];
+const PLAYED_FILTERS: { value: PlayedFilter; label: string }[] = [
+  { value: "all", label: "All" },
+  { value: "new", label: "New" },
+  { value: "played", label: "Played" },
+];
 
-/** Curated rows only earn their space once the library is big enough that they aren't just repeating "All songs". */
-const CURATED_MIN_LIBRARY_SIZE = 5;
-
-function getDailyChallenge(songs: Song[]): Song | undefined {
-  if (songs.length === 0) return undefined;
-  const today = new Date();
-  const dayKey = `${today.getFullYear()}-${today.getMonth()}-${today.getDate()}`;
-  const index = Math.abs(hashStringToSeed(dayKey)) % songs.length;
-  return songs[index];
-}
+const GRID = "grid grid-cols-2 gap-x-4 gap-y-7 sm:grid-cols-3 lg:grid-cols-4 lg:gap-x-5";
 
 function difficultyRank(difficulty: string): number {
   const rank = DIFFICULTY_ORDER.indexOf(difficulty as Difficulty);
   return rank === -1 ? DIFFICULTY_ORDER.length : rank;
 }
 
+/**
+ * The full catalog. Today's pick and the "jump back in" shelves live on the
+ * home screen, so this page is only about finding a song: one sticky toolbar,
+ * one grid.
+ */
 export default function LibraryPage() {
   const librarySongs = useLibraryStore((s) => s.songs);
   const libraryStatus = useLibraryStore((s) => s.status);
   const removeSong = useLibraryStore((s) => s.removeSong);
   const isAdmin = useAuthStore((s) => s.isAdmin);
-  const history = useStatsStore((s) => s.statistics.history);
   const completedSongIds = useStatsStore((s) => s.progress.completedSongIds);
 
   // Only admins can remove songs from the global library (row level security enforces it too).
@@ -54,35 +53,16 @@ export default function LibraryPage() {
       (error: unknown) => toast.error(error instanceof Error ? error.message : "Couldn't remove that song."),
     );
   };
-  const deleteIfAdmin = () => (isAdmin ? handleRemove : undefined);
+  const onDelete = isAdmin ? handleRemove : undefined;
 
   const [search, setSearch] = useState("");
   const [difficultyFilter, setDifficultyFilter] = useState<DifficultyFilter>("all");
+  const [playedFilter, setPlayedFilter] = useState<PlayedFilter>("all");
   const [sortKey, setSortKey] = useState<SortKey>("title");
 
   const allSongs = useMemo(() => [...SONGS, ...librarySongs], [librarySongs]);
-  const showCurated = allSongs.length >= CURATED_MIN_LIBRARY_SIZE;
-
-  const dailyChallenge = useMemo(
-    () => (allSongs.length > 1 ? getDailyChallenge(allSongs) : undefined),
-    [allSongs],
-  );
-
-  const recentlyPlayed = useMemo(() => {
-    const seen = new Set<string>();
-    const recent: Song[] = [];
-    for (let i = history.length - 1; i >= 0 && recent.length < 6; i--) {
-      const songId = history[i].songId;
-      if (seen.has(songId)) continue;
-      seen.add(songId);
-      const song = findSong(songId, librarySongs);
-      if (song) recent.push(song);
-    }
-    return recent;
-  }, [history, librarySongs]);
-
-  const recommended = useMemo(
-    () => allSongs.filter((song) => !completedSongIds.includes(song.id)).slice(0, 6),
+  const playedCount = useMemo(
+    () => allSongs.filter((song) => completedSongIds.includes(song.id)).length,
     [allSongs, completedSongIds],
   );
 
@@ -90,6 +70,7 @@ export default function LibraryPage() {
     const query = search.trim().toLowerCase();
 
     return allSongs
+      .filter((song) => playedFilter === "all" || completedSongIds.includes(song.id) === (playedFilter === "played"))
       .filter((song) => difficultyFilter === "all" || song.difficulty === difficultyFilter)
       .filter(
         (song) =>
@@ -101,7 +82,7 @@ export default function LibraryPage() {
         if (sortKey === "difficulty") return difficultyRank(a.difficulty) - difficultyRank(b.difficulty);
         return a[sortKey].localeCompare(b[sortKey]);
       });
-  }, [allSongs, search, difficultyFilter, sortKey]);
+  }, [allSongs, search, difficultyFilter, sortKey, playedFilter, completedSongIds]);
 
   if (allSongs.length === 0) {
     if (libraryStatus === "idle" || libraryStatus === "loading") return <LibrarySkeleton />;
@@ -109,15 +90,20 @@ export default function LibraryPage() {
     return <EmptyLibraryOnboarding isAdmin={isAdmin} />;
   }
 
-  const isFiltering = search.trim().length > 0 || difficultyFilter !== "all";
+  const clearFilters = () => {
+    setSearch("");
+    setDifficultyFilter("all");
+    setPlayedFilter("all");
+  };
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-8 md:py-12">
-      <div className="mb-6 flex items-end justify-between gap-4 md:mb-8">
+    <div className="mx-auto max-w-6xl px-4 pt-8 pb-12 md:pt-12">
+      <div className="mb-5 flex items-end justify-between gap-4">
         <div>
           <h1 className="font-display text-2xl font-semibold tracking-tight md:text-3xl">Library</h1>
-          <p className="mt-1 text-sm text-muted-foreground md:text-base">
-            {allSongs.length} {allSongs.length === 1 ? "song" : "songs"} · pick one and fill in the gaps.
+          <p className="mt-1 text-muted-foreground">
+            {allSongs.length} {allSongs.length === 1 ? "song" : "songs"}
+            {playedCount > 0 && ` · you've played ${playedCount}`}
           </p>
         </div>
         {isAdmin && (
@@ -133,193 +119,172 @@ export default function LibraryPage() {
         )}
       </div>
 
-      {dailyChallenge && !isFiltering && <DailyChallenge song={dailyChallenge} />}
-
-      {showCurated && !isFiltering && recentlyPlayed.length > 0 && (
-        <Section title="Continue playing">
-          <SongRow songs={recentlyPlayed} deleteFor={deleteIfAdmin} />
-        </Section>
-      )}
-
-      {showCurated && !isFiltering && recommended.length > 0 && (
-        <Section title="Not played yet">
-          <SongRow songs={recommended} deleteFor={deleteIfAdmin} />
-        </Section>
-      )}
-
-      <Section title="All songs">
-        <div className="mb-4 flex flex-col gap-3">
-          <div className="relative">
-            <Search
-              aria-hidden
-              className="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-muted-foreground"
-            />
-            <Input
-              type="search"
-              aria-label="Search songs by title or artist"
-              placeholder="Search by title or artist…"
-              className="h-11 rounded-full pr-10 pl-10"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-            {search && (
-              <button
-                type="button"
-                onClick={() => setSearch("")}
-                aria-label="Clear search"
-                className="absolute top-1/2 right-1.5 flex size-8 -translate-y-1/2 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-              >
-                <X aria-hidden className="size-4" />
-              </button>
-            )}
+      {/* Sticks under the site header so filters stay in reach while scrolling a long catalog. */}
+      <div className="sticky top-14 z-20 -mx-4 mb-6 bg-background/85 px-4 py-3 backdrop-blur-md supports-[backdrop-filter]:bg-background/70">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+          {/* Phones: search and sort share a row. lg: "contents" dissolves the row into the toolbar's single line. */}
+          <div className="flex gap-2 lg:contents">
+            <div className="relative min-w-0 flex-1 lg:w-64 lg:flex-none lg:shrink-0">
+              <Search
+                aria-hidden
+                className="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-muted-foreground"
+              />
+              <Input
+                type="search"
+                aria-label="Search songs by title or artist"
+                placeholder="Search title or artist"
+                className="h-10 rounded-full pr-10 pl-10"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+              {search && (
+                <button
+                  type="button"
+                  onClick={() => setSearch("")}
+                  aria-label="Clear search"
+                  className="absolute top-1/2 right-1 flex size-8 -translate-y-1/2 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                >
+                  <X aria-hidden className="size-4" />
+                </button>
+              )}
+            </div>
+            <SortSelect value={sortKey} onChange={setSortKey} className="h-10 lg:hidden" />
           </div>
 
-          <div className="flex items-center gap-2">
-            <div
-              role="group"
-              aria-label="Filter by difficulty"
-              className="scroll-row -ml-4 flex min-w-0 flex-1 gap-1.5 overflow-x-auto pl-4 sm:ml-0 sm:pl-0"
-            >
-              {DIFFICULTY_FILTERS.map((level) => {
-                const isActive = difficultyFilter === level;
-                return (
-                  <button
-                    key={level}
-                    type="button"
-                    aria-pressed={isActive}
-                    onClick={() => setDifficultyFilter(level)}
-                    className={cn(
-                      "relative min-h-9 shrink-0 rounded-full px-3.5 text-sm capitalize transition-colors duration-200",
-                      isActive
-                        ? "text-primary-foreground"
-                        : "border border-border text-muted-foreground hover:bg-accent hover:text-foreground",
-                    )}
-                  >
-                    {isActive && (
-                      <motion.span
-                        layoutId="library-filter-pill"
-                        aria-hidden
-                        className="absolute inset-0 rounded-full bg-primary"
-                        transition={{ type: "spring", stiffness: 500, damping: 40 }}
-                      />
-                    )}
-                    <span className="relative">{level}</span>
-                  </button>
-                );
-              })}
+          <div className="flex min-w-0 flex-1 items-center gap-2">
+            <div className="scroll-row -mx-4 flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto px-4 lg:mx-0 lg:px-0">
+              <ChipGroup
+                label="Filter by played status"
+                layoutId="library-played-pill"
+                options={PLAYED_FILTERS}
+                value={playedFilter}
+                onChange={setPlayedFilter}
+              />
+              <span aria-hidden className="mx-1 h-5 w-px shrink-0 bg-border" />
+              <ChipGroup
+                label="Filter by difficulty"
+                layoutId="library-difficulty-pill"
+                options={DIFFICULTY_FILTERS.map((level) => ({
+                  value: level,
+                  label: level === "all" ? "Any level" : level[0].toUpperCase() + level.slice(1),
+                }))}
+                value={difficultyFilter}
+                onChange={setDifficultyFilter}
+              />
             </div>
 
-            <select
-              aria-label="Sort songs by"
-              value={sortKey}
-              onChange={(e) => setSortKey(e.target.value as SortKey)}
-              className="h-9 shrink-0 rounded-full border border-input bg-input/30 px-3 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
-            >
-              <option value="title">Title</option>
-              <option value="artist">Artist</option>
-              <option value="difficulty">Difficulty</option>
-            </select>
+            <SortSelect value={sortKey} onChange={setSortKey} className="hidden h-9 lg:block" />
           </div>
         </div>
+      </div>
 
-        {filteredSongs.length > 0 ? (
-          <div className="grid grid-cols-2 gap-3 sm:gap-5 lg:grid-cols-3">
-            {filteredSongs.map((song, index) => (
-              <SongCard key={song.id} song={song} index={index} onDelete={deleteIfAdmin()} />
-            ))}
-          </div>
-        ) : (
-          <div className="glass flex flex-col items-center gap-3 rounded-2xl px-4 py-10 text-center">
-            <p className="text-muted-foreground">No songs match that search.</p>
-            <Button
-              variant="outline"
-              className="rounded-full"
-              onClick={() => {
-                setSearch("");
-                setDifficultyFilter("all");
-              }}
-            >
-              Clear filters
-            </Button>
-          </div>
-        )}
-      </Section>
+      {filteredSongs.length > 0 ? (
+        <div className={GRID}>
+          {filteredSongs.map((song, index) => (
+            <SongCard key={song.id} song={song} index={index} onDelete={onDelete} />
+          ))}
+        </div>
+      ) : (
+        <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-border px-4 py-14 text-center">
+          <Search aria-hidden className="size-6 text-muted-foreground" />
+          <p className="font-medium">No songs match those filters</p>
+          <p className="max-w-xs text-sm text-muted-foreground text-pretty">
+            {search.trim() ? `Nothing for “${search.trim()}”. ` : ""}Try a different level, or clear everything to see all {allSongs.length}.
+          </p>
+          <Button variant="outline" className="mt-1 rounded-full" onClick={clearFilters}>
+            Clear filters
+          </Button>
+        </div>
+      )}
     </div>
   );
 }
 
-/** A distinct horizontal feature card, so the day's pick doesn't read as just another grid tile. */
-function DailyChallenge({ song }: { song: Song }) {
-  const difficultyClass = DIFFICULTY_STYLES[song.difficulty] ?? DIFFICULTY_STYLES.beginner;
-
-  return (
-    <motion.section
-      aria-label="Daily challenge"
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
-      className="mb-8 md:mb-10"
-    >
-      <Link
-        href={`/game?id=${encodeURIComponent(song.id)}`}
-        className="group glass relative flex flex-col overflow-hidden rounded-2xl transition-shadow duration-300 hover:shadow-[0_24px_48px_-28px_var(--glow-primary)] sm:flex-row"
-      >
-        <div
-          aria-hidden
-          className="glow-blob -top-16 -right-10 size-56 bg-primary/25 opacity-70 transition-opacity duration-500 group-hover:opacity-100"
-        />
-        <SongThumbnail song={song} className="sm:w-72 sm:shrink-0" />
-        <div className="relative flex flex-1 flex-col justify-center gap-3 p-4 sm:p-6">
-          <span className="flex items-center gap-1.5 text-xs font-medium text-primary">
-            <Sparkles aria-hidden className="size-3.5" />
-            Today&apos;s pick
-          </span>
-          <div className="min-w-0">
-            <h2 className="truncate font-display text-xl font-semibold sm:text-2xl">{song.title}</h2>
-            <p className="truncate text-sm text-muted-foreground">{song.artist}</p>
-          </div>
-          <div className="flex items-center gap-3">
-            <span className="inline-flex h-10 items-center gap-2 rounded-full bg-primary px-4 text-sm font-semibold text-primary-foreground transition-transform duration-150 group-active:scale-[0.97]">
-              <Play aria-hidden className="size-4" fill="currentColor" />
-              Play now
-            </span>
-            <span className={cn("rounded-full px-2 py-0.5 text-[0.65rem] font-semibold capitalize", difficultyClass)}>
-              {song.difficulty}
-            </span>
-          </div>
-        </div>
-      </Link>
-    </motion.section>
-  );
-}
-
-/** Swipeable on phones (with the next card peeking in to signal it scrolls); a plain grid from sm up. */
-function SongRow({
-  songs,
-  deleteFor,
+function SortSelect({
+  value,
+  onChange,
+  className,
 }: {
-  songs: Song[];
-  deleteFor: (song: Song) => ((songId: string) => void) | undefined;
+  value: SortKey;
+  onChange: (value: SortKey) => void;
+  className?: string;
 }) {
   return (
-    <div className="scroll-row -mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-1 sm:mx-0 sm:grid sm:grid-cols-2 sm:gap-5 sm:overflow-visible sm:px-0 lg:grid-cols-3">
-      {songs.map((song, index) => (
-        <SongCard
-          key={song.id}
-          song={song}
-          index={index}
-          onDelete={deleteFor(song)}
-          className="w-[62vw] max-w-64 shrink-0 snap-start sm:w-auto sm:max-w-none"
-        />
-      ))}
+    <select
+      aria-label="Sort songs by"
+      value={value}
+      onChange={(e) => onChange(e.target.value as SortKey)}
+      className={cn(
+        "shrink-0 rounded-full border border-input bg-background px-3 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+        className,
+      )}
+    >
+      <option value="title">Sort: Title</option>
+      <option value="artist">Sort: Artist</option>
+      <option value="difficulty">Sort: Level</option>
+    </select>
+  );
+}
+
+function ChipGroup<T extends string>({
+  label,
+  layoutId,
+  options,
+  value,
+  onChange,
+}: {
+  label: string;
+  layoutId: string;
+  options: { value: T; label: string }[];
+  value: T;
+  onChange: (value: T) => void;
+}) {
+  return (
+    <div role="group" aria-label={label} className="flex shrink-0 gap-1">
+      {options.map((option) => {
+        const isActive = value === option.value;
+        return (
+          <button
+            key={option.value}
+            type="button"
+            aria-pressed={isActive}
+            onClick={() => onChange(option.value)}
+            className={cn(
+              "relative min-h-9 shrink-0 rounded-full px-3.5 text-sm transition-colors duration-200",
+              isActive ? "font-medium text-background" : "text-muted-foreground hover:bg-accent hover:text-foreground",
+            )}
+          >
+            {isActive && (
+              <motion.span
+                layoutId={layoutId}
+                aria-hidden
+                className="absolute inset-0 rounded-full bg-foreground"
+                transition={{ type: "spring", stiffness: 500, damping: 40 }}
+              />
+            )}
+            <span className="relative">{option.label}</span>
+          </button>
+        );
+      })}
     </div>
   );
 }
 
+/** Same grid as the real page, so nothing jumps when the songs arrive. */
 function LibrarySkeleton() {
   return (
-    <div role="status" aria-label="Loading library" className="flex justify-center px-4 py-24">
-      <Loader2 aria-hidden className="size-6 animate-spin text-muted-foreground" />
+    <div role="status" aria-label="Loading library" className="mx-auto max-w-6xl px-4 pt-8 pb-12 md:pt-12">
+      <div className="mb-5 h-9 w-40 animate-pulse rounded-lg bg-muted" />
+      <div className="mb-6 h-10 w-full animate-pulse rounded-full bg-muted/70 lg:w-80" />
+      <div className={GRID}>
+        {Array.from({ length: 8 }, (_, i) => (
+          <div key={i}>
+            <div className="aspect-video animate-pulse rounded-lg bg-muted" />
+            <div className="mt-2.5 h-4 w-3/4 animate-pulse rounded bg-muted" />
+            <div className="mt-1.5 h-3.5 w-1/2 animate-pulse rounded bg-muted/70" />
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -347,9 +312,9 @@ function EmptyLibraryOnboarding({ isAdmin }: { isAdmin: boolean }) {
   return (
     <div className="mx-auto flex max-w-md flex-col items-center px-4 py-20 text-center md:py-24">
       <motion.div
-        initial={{ scale: 0.7, opacity: 0 }}
+        initial={{ scale: 0.85, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
-        transition={{ type: "spring", stiffness: 260, damping: 20 }}
+        transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
         className="glass flex size-16 items-center justify-center rounded-2xl text-primary"
       >
         <Music2 aria-hidden className="size-7" />
@@ -381,14 +346,5 @@ function EmptyLibraryOnboarding({ isAdmin }: { isAdmin: boolean }) {
         </p>
       )}
     </div>
-  );
-}
-
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <section className="mb-8 md:mb-10">
-      <h2 className="mb-3 font-display text-lg font-semibold">{title}</h2>
-      {children}
-    </section>
   );
 }
